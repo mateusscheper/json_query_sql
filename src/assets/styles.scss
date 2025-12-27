@@ -1,0 +1,293 @@
+@import 'primeflex/primeflex.scss';
+
+body {
+  font-family: "Roboto Flex", sans-serif;
+  font-optical-sizing: auto;
+  color: #252525;
+  font-style: normal;
+  font-variation-settings: "slnt" 0,
+  "wdth" 100,
+  "GRAD" 0,
+  "XOPQ" 96,
+  "XTRA" 468,
+  "YOPQ" 79,
+  "YTAS" 750,
+  "YTDE" -203,
+  "YTFI" 738,
+  "YTLC" 514,
+  "YTUC" 712;
+  height: 100vh;
+  width: 100%;
+  margin: 0;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  box-sizing: border-box;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+#app {
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+}
+
+.main-container {
+  padding: 20px;
+  height: 100vh;
+  width: 100vw;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+}
+
+.loading-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+}
+
+.loading-content {
+  text-align: center;
+}
+
+.upload-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+}
+
+.interface-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.top-section {
+  display: flex;
+  gap: 15px;
+  margin-bottom: 5px;
+}
+
+.textarea-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.textarea-wrapper {
+  position: relative;
+  height: 100%;
+}
+
+.textarea-field {
+  width: 100%;
+  height: 100%;
+  resize: none;
+}
+
+.textarea-message {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  right: 8px;
+  margin: 0;
+  font-size: 11px;
+  pointer-events: none;
+}
+
+.history-container {
+  width: 300px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  display: flex;
+  flex-direction: column;
+}
+
+.history-header {
+  padding: 10px;
+  border-bottom: 1px solid #ddd;
+  background: #f8f9fa;
+  font-weight: bold;
+  font-size: 14px;
+}
+
+.history-content {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.history-empty {
+  padding: 15px;
+  text-align: center;
+  color: #666;
+  font-size: 13px;
+}
+
+.history-item {
+  padding: 8px 12px;
+  border-bottom: 1px solid #eee;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1.4;
+  transition: background-color 0.2s;
+}
+
+.history-item:hover {
+  background-color: #f0f0f0;
+}
+
+.resize-divider {
+  height: 10px;
+  background: #f0f0f0;
+  border: 1px solid #ddd;
+  cursor: ns-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 5px;
+}
+
+.resize-handle {
+  width: 30px;
+  height: 3px;
+  background: #ccc;
+  border-radius: 2px;
+}
+
+.bottom-section {
+  display: flex;
+  gap: 15px;
+}
+
+.results-container {
+  flex: 1;
+  border: 1px solid #ddd;
+  overflow: auto;
+}
+
+.skeleton-container {
+  padding: 20px;
+}
+
+.skeleton-content {
+  margin-bottom: 15px;
+}
+
+.skeleton-item {
+  margin-bottom: 8px;
+}
+
+.results-table {
+  height: 100%;
+}
+
+.no-results {
+  padding: 20px;
+  text-align: center;
+  color: #666;
+}
+
+.json-summary {
+  width: 300px;
+  border: 1px solid #ddd;
+  padding: 15px;
+  overflow: auto;
+}
+
+.file-info {
+  margin-bottom: 15px;
+}
+
+.file-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.file-link {
+  color: #007bff;
+  cursor: pointer;
+  text-decoration: underline;
+  margin-left: 6px;
+}
+
+.remove-btn {
+  font-size: 11px;
+  padding: 4px 8px;
+}
+
+.tables-section {
+  
+}
+
+.tables-title {
+  font-size: 14px;
+  margin-bottom: 10px;
+}
+
+.tables-list {
+  font-size: 12px;
+  background: #f5f5f5;
+  padding: 8px;
+  border-radius: 4px;
+}
+
+.table-item {
+  margin-bottom: 2px;
+}
+
+.table-code {
+  color: #007bff;
+}
+
+.tables-empty {
+  color: #666;
+  font-style: italic;
+}
+
+.dialog-container {
+  width: 80vw;
+  height: 80vh;
+}
+
+.dialog-warning {
+  margin-bottom: 15px;
+}
+
+.dialog-warning-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.dialog-enable-btn {
+  margin-left: 15px;
+}
+
+.dialog-viewer {
+  height: 100%;
+  overflow: auto;
+}
+
+.w-100vh {
+  width: 100vh;
+}
+
+.h-100vh {
+  height: 100vh;
+}
+
+.h-100 {
+  height: 100%;
+}
+
+.h-0 {
+  height: 0;
+}
