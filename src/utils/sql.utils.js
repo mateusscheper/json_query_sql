@@ -10,10 +10,19 @@ class QueryBuilder {
         this.results = [];
         this.limitValue = null;
         this.totalResults = 0;
+        this.isUnion = false;
+        this.unionAll = false;
+        this.leftQuery = null;
+        this.rightQuery = null;
     }
 
     parseQuery(sqlQuery) {
         const query = sqlQuery.trim().replace(/;\s*$/, '');
+
+        // Verifica se é uma query UNION
+        if (this.isUnionQuery(query)) {
+            return this.parseUnionQuery(query);
+        }
 
         const selectMatch = query.match(/SELECT\s+(.+?)\s+FROM/i);
         const fromMatch = query.match(/FROM\s+(.+?)(?:\s+WHERE|\s+LIMIT|$)/i);
@@ -32,8 +41,36 @@ class QueryBuilder {
         return this;
     }
 
+    isUnionQuery(query) {
+        return /\bUNION\s+(ALL\s+)?SELECT\b/i.test(query);
+    }
+
+    parseUnionQuery(query) {
+        const unionAllMatch = query.match(/(.+?)\s+UNION\s+ALL\s+(.+)/i);
+        const unionMatch = query.match(/(.+?)\s+UNION\s+(.+)/i);
+        
+        if (unionAllMatch) {
+            this.isUnion = true;
+            this.unionAll = true;
+            this.leftQuery = unionAllMatch[1].trim();
+            this.rightQuery = unionAllMatch[2].trim();
+        } else if (unionMatch) {
+            this.isUnion = true;
+            this.unionAll = false;
+            this.leftQuery = unionMatch[1].trim();
+            this.rightQuery = unionMatch[2].trim();
+        }
+        
+        return this;
+    }
+
     selectFrom(tablePath) {
-        this.table = JsonUtils.getJsonObject(this.jsonData, tablePath || this.tablePath);
+        const path = tablePath || this.tablePath;
+        if (SqlUtils.isWildcardPath(path)) {
+            this.table = SqlUtils.expandWildcardPath(this.jsonData, path);
+        } else {
+            this.table = JsonUtils.getJsonObject(this.jsonData, path);
+        }
         return this;
     }
 
@@ -87,10 +124,56 @@ class QueryBuilder {
     }
 
     build() {
+        // Se for uma query UNION, processa as duas queries separadamente
+        if (this.isUnion) {
+            return this.executeUnion();
+        }
+        
         return {
             results: this.results,
             totalResults: this.totalResults,
             limited: this.limitValue !== -1 && this.totalResults > (this.limitValue || 100)
+        };
+    }
+
+    executeUnion() {
+        // Executa a query da esquerda
+        const leftResult = SqlUtils.executeSQL(this.jsonData, this.leftQuery);
+        // Executa a query da direita
+        const rightResult = SqlUtils.executeSQL(this.jsonData, this.rightQuery);
+        
+        // Calcula o total real baseado nos totalResults das queries individuais
+        const totalResults = leftResult.totalResults + rightResult.totalResults;
+        
+        let combinedResults = [...leftResult.results, ...rightResult.results];
+        
+        // Se for UNION (sem ALL), remove duplicatas
+        if (!this.unionAll) {
+            const seen = new Set();
+            combinedResults = combinedResults.filter(row => {
+                const key = JSON.stringify(row);
+                if (seen.has(key)) {
+                    return false;
+                }
+                seen.add(key);
+                return true;
+            });
+        }
+        
+        const limitValue = this.limitValue || 100;
+        const limited = this.limitValue !== -1 && totalResults > limitValue;
+        
+        // Aplica o limite se necessário
+        if (this.limitValue === -1) {
+            // Sem limite
+        } else {
+            combinedResults = combinedResults.slice(0, limitValue);
+        }
+        
+        return {
+            results: combinedResults,
+            totalResults: totalResults,
+            limited: limited
         };
     }
 }
@@ -98,8 +181,14 @@ class QueryBuilder {
 export class SqlUtils {
     static executeSQL(jsonData, sqlQuery) {
         try {
-            return new QueryBuilder(jsonData)
-                .parseQuery(sqlQuery)
+            const builder = new QueryBuilder(jsonData).parseQuery(sqlQuery);
+            
+            // Se for uma query UNION, executa diretamente
+            if (builder.isUnion) {
+                return builder.build();
+            }
+            
+            return builder
                 .selectFrom()
                 .validateTable()
                 .processColumns()
@@ -124,7 +213,18 @@ export class SqlUtils {
     static buildColumnList(columnDefinition, sourceData) {
         class ColumnListBuilder {
             constructor(data) {
-                this.referenceRow = Array.isArray(data) ? data[0] : data;
+                // Para wildcards com dados heterogêneos, coletamos todas as colunas possíveis
+                if (Array.isArray(data) && data.length > 0) {
+                    const allKeys = new Set();
+                    data.forEach(item => {
+                        if (item && typeof item === 'object') {
+                            Object.keys(item).forEach(key => allKeys.add(key));
+                        }
+                    });
+                    this.referenceRow = Object.fromEntries(Array.from(allKeys).map(key => [key, null]));
+                } else {
+                    this.referenceRow = Array.isArray(data) ? data[0] : data;
+                }
                 this.columns = [];
             }
 
@@ -139,6 +239,29 @@ export class SqlUtils {
             }
 
             fromString(str) {
+                // Verifica se há uma combinação de colunas específicas com wildcard
+                if (str.includes('*') && str.includes(',')) {
+                    const parts = str.split(',').map(c => c.trim());
+                    const specificColumns = [];
+                    let hasWildcard = false;
+                    
+                    parts.forEach(part => {
+                        if (part === '*') {
+                            hasWildcard = true;
+                        } else {
+                            specificColumns.push(part);
+                        }
+                    });
+                    
+                    if (hasWildcard) {
+                        // Pega todas as colunas e remove as que já foram especificadas
+                        const allColumns = Object.keys(this.referenceRow);
+                        const remainingColumns = allColumns.filter(col => !specificColumns.includes(col));
+                        this.columns = [...specificColumns, ...remainingColumns];
+                        return this;
+                    }
+                }
+                
                 this.columns = str.includes(',')
                     ? str.split(',').map(c => c.trim())
                     : [str.trim()];
@@ -146,9 +269,8 @@ export class SqlUtils {
             }
 
             validate() {
-                return SqlUtils.isValidColumn(this.columns, this.referenceRow)
-                    ? this.columns
-                    : [];
+                // Para dados heterogêneos, não validamos se todas as colunas existem em todos os objetos
+                return this.columns;
             }
         }
 
@@ -341,5 +463,67 @@ export class SqlUtils {
         });
 
         return [result];
+    }
+
+    static isWildcardPath(path) {
+        return path.includes('*');
+    }
+
+    static expandWildcardPath(jsonData, path) {
+        const parts = path.split('.');
+        let result = [];
+        
+        function processWildcard(obj, remainingParts) {
+            if (remainingParts.length === 0) {
+                // Fim do caminho - retorna o objeto se for array, ou seus arrays filhos
+                if (Array.isArray(obj)) {
+                    return obj;
+                } else if (obj && typeof obj === 'object') {
+                    let items = [];
+                    Object.keys(obj).forEach(key => {
+                        const value = obj[key];
+                        if (Array.isArray(value)) {
+                            items = items.concat(value);
+                        }
+                    });
+                    return items;
+                }
+                return [];
+            }
+            
+            const [currentPart, ...restParts] = remainingParts;
+            let collected = [];
+            
+            if (currentPart === '*') {
+                if (Array.isArray(obj)) {
+                    // Para cada item do array, processa o resto do caminho
+                    obj.forEach(item => {
+                        const subResult = processWildcard(item, restParts);
+                        collected = collected.concat(subResult);
+                    });
+                } else if (obj && typeof obj === 'object') {
+                    // Para cada propriedade do objeto, processa o resto do caminho
+                    Object.keys(obj).forEach(key => {
+                        const value = obj[key];
+                        const subResult = processWildcard(value, restParts);
+                        collected = collected.concat(subResult);
+                    });
+                }
+            } else {
+                // Parte específica do caminho
+                const cleanPart = currentPart.startsWith('"') && currentPart.endsWith('"') 
+                    ? currentPart.slice(1, -1) 
+                    : currentPart;
+                    
+                if (obj && typeof obj === 'object' && cleanPart in obj) {
+                    const subResult = processWildcard(obj[cleanPart], restParts);
+                    collected = collected.concat(subResult);
+                }
+            }
+            
+            return collected;
+        }
+        
+        return processWildcard(jsonData, parts);
     }
 }

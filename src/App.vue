@@ -238,31 +238,14 @@ const addToHistory = (query) => {
   localStorage.setItem('queryHistory', JSON.stringify(queryHistory.value))
 }
 
-const selectHistoryQuery = (query, event) => {
-  const isCtrlClick = event.ctrlKey || event.metaKey
-  
-  if (!sqlQuery.value.trim() || isCtrlClick) {
-    sqlQuery.value = query
-    document.querySelector('.textarea-field').focus()
-  } else {
-    confirm.require({
-      message: 'Deseja substituir a consulta atual pela consulta do histórico? (Dica: Ctrl+Click substitui diretamente)',
-      header: 'Confirmar substituição',
-      icon: 'pi pi-exclamation-triangle',
-      rejectProps: {
-        label: 'Cancelar',
-        severity: 'secondary',
-        outlined: true
-      },
-      acceptProps: {
-        label: 'Substituir'
-      },
-      accept: () => {
-        sqlQuery.value = query
-        document.querySelector('.textarea-field').focus()
-      }
-    })
-  }
+const selectHistoryQuery = (query) => {
+  sqlQuery.value = query
+  document.querySelector('.textarea-field').focus()
+}
+
+const selectTableQuery = (tableName) => {
+  sqlQuery.value = `SELECT * FROM ${tableName}`
+  document.querySelector('.textarea-field').focus()
 }
 
 const confirmRemoveFile = () => {
@@ -338,7 +321,7 @@ const confirmRemoveFile = () => {
             <div
                 v-for="(query, index) in queryHistory"
                 :key="index"
-                @click="selectHistoryQuery(query, $event)"
+                @click="selectHistoryQuery(query)"
                 class="history-item"
             >
               {{ query }}
@@ -374,6 +357,15 @@ const confirmRemoveFile = () => {
               scrollHeight="100%"
               class="results-table"
           >
+            <Column
+                field="_index"
+                :header="null"
+                class="index-column"
+            >
+              <template #body="slotProps">
+                {{ slotProps.index + 1 }}
+              </template>
+            </Column>
             <Column
                 v-for="col in columnNames"
                 :key="col"
@@ -414,7 +406,7 @@ const confirmRemoveFile = () => {
             <div class="tables-section">
               <h4 class="tables-title">Tabelas disponíveis:</h4>
               <div class="tables-list">
-                <div v-for="table in jsonSummary.tables" :key="table" class="table-item">
+                <div v-for="table in jsonSummary.tables" :key="table" class="table-item" @click="selectTableQuery(table)">
                   <code class="table-code">{{ table }}</code>
                 </div>
                 <div v-if="jsonSummary.tables.length === 0" class="tables-empty">

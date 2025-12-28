@@ -187,6 +187,17 @@ body {
   height: 100%;
 }
 
+.results-table .index-column {
+  width: 50px;
+  text-align: center;
+  border-right: 1px solid #ddd;
+  background-color: #f8f9fa;
+}
+
+.results-table .index-column .p-column-header-content {
+  display: none;
+}
+
 .no-results {
   padding: 20px;
   text-align: center;
@@ -241,6 +252,14 @@ body {
 
 .table-item {
   margin-bottom: 2px;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 3px;
+  transition: background-color 0.2s;
+}
+
+.table-item:hover {
+  background-color: #e9ecef;
 }
 
 .table-code {
