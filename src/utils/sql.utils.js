@@ -2,26 +2,35 @@ import {JsonUtils} from './json.utils.js';
 import {debugError, debugLog} from './debug.utils.js';
 
 class QueryBuilder {
-    constructor(jsonData) {
+    constructor(jsonData, cteContext = {}, isInCTE = false) {
         this.jsonData = jsonData;
+        this.cteContext = cteContext;
+        this.isInCTE = isInCTE;
         this.table = null;
         this.columns = [];
         this.whereClause = null;
         this.results = [];
         this.limitValue = null;
+        this.originalLimitValue = null;
         this.totalResults = 0;
         this.isUnion = false;
         this.unionAll = false;
         this.leftQuery = null;
         this.rightQuery = null;
+        this.tableAlias = null;
+        this.joins = [];
+        this.isJoinQuery = false;
     }
 
     parseQuery(sqlQuery) {
         const query = sqlQuery.trim().replace(/;\s*$/, '');
 
-        // Verifica se é uma query UNION
         if (this.isUnionQuery(query)) {
             return this.parseUnionQuery(query);
+        }
+
+        if (SqlUtils.isJoinQuery(query)) {
+            return this.parseJoinQuery(query);
         }
 
         const selectMatch = query.match(/SELECT\s+(.+?)\s+FROM/i);
@@ -34,9 +43,15 @@ class QueryBuilder {
         }
 
         this.columns = selectMatch[1].trim();
-        this.tablePath = fromMatch[1].trim();
-        this.whereClause = whereMatch ? SqlUtils.getWhereClauseFn(whereMatch[1].trim()) : null;
+        const fromClause = fromMatch[1].trim();
+
+        const {tablePath, alias} = SqlUtils.parseTableAlias(fromClause);
+        this.tablePath = tablePath;
+        this.tableAlias = alias;
+
+        this.whereClause = whereMatch ? SqlUtils.getWhereClauseFn(whereMatch[1].trim(), alias, tablePath) : null;
         this.limitValue = limitMatch ? parseInt(limitMatch[1]) : null;
+        this.originalLimitValue = this.limitValue;
 
         return this;
     }
@@ -48,7 +63,7 @@ class QueryBuilder {
     parseUnionQuery(query) {
         const unionAllMatch = query.match(/(.+?)\s+UNION\s+ALL\s+(.+)/i);
         const unionMatch = query.match(/(.+?)\s+UNION\s+(.+)/i);
-        
+
         if (unionAllMatch) {
             this.isUnion = true;
             this.unionAll = true;
@@ -60,23 +75,94 @@ class QueryBuilder {
             this.leftQuery = unionMatch[1].trim();
             this.rightQuery = unionMatch[2].trim();
         }
-        
+
         return this;
+    }
+
+    parseJoinQuery(query) {
+        this.isJoinQuery = true;
+
+        const selectMatch = query.match(/SELECT\s+(.+?)\s+FROM/i);
+        if (!selectMatch) {
+            throw new Error('Query JOIN inválida: SELECT não encontrado');
+        }
+        this.columns = selectMatch[1].trim();
+
+        const fromToJoinMatch = query.match(/FROM\s+([^\s]+(?:\s+[^\s]+)*)\s+(INNER\s+JOIN|LEFT\s+JOIN|RIGHT\s+JOIN|OUTER\s+JOIN|FULL\s+OUTER\s+JOIN|JOIN)/i);
+        if (!fromToJoinMatch) {
+            throw new Error('Query JOIN inválida: FROM ou JOIN não encontrado');
+        }
+
+        const fromClause = fromToJoinMatch[1].trim();
+        const {tablePath, alias} = SqlUtils.parseTableAlias(fromClause);
+        this.tablePath = tablePath;
+        this.tableAlias = alias;
+
+        this.parseJoins(query);
+
+        const whereMatch = query.match(/WHERE\s+(.+?)(?:\s+LIMIT|$)/i);
+        const limitMatch = query.match(/LIMIT\s+(-?\d+)/i);
+
+        this.whereClause = whereMatch ? SqlUtils.getWhereClauseFn(whereMatch[1].trim()) : null;
+        this.limitValue = limitMatch ? parseInt(limitMatch[1]) : null;
+        this.originalLimitValue = this.limitValue;
+
+        return this;
+    }
+
+    parseJoins(query) {
+        const joinPattern = /(INNER\s+JOIN|LEFT\s+JOIN|RIGHT\s+JOIN|OUTER\s+JOIN|FULL\s+OUTER\s+JOIN|JOIN)\s+([^\s]+(?:\s+[^\s]+)*)\s+ON\s+([^\s]+\s*[=<>!]+\s*[^\s]+)/gi;
+
+        let match;
+        while ((match = joinPattern.exec(query)) !== null) {
+            const joinType = match[1].trim().toUpperCase();
+            const tableClause = match[2].trim();
+            const onCondition = match[3].trim();
+
+            const {tablePath, alias} = SqlUtils.parseTableAlias(tableClause);
+
+            this.joins.push({
+                type: joinType === 'JOIN' ? 'INNER JOIN' : joinType,
+                tablePath,
+                alias,
+                onCondition
+            });
+        }
     }
 
     selectFrom(tablePath) {
         const path = tablePath || this.tablePath;
+
+        if (this.cteContext[path]) {
+            this.table = this.cteContext[path];
+            return this;
+        }
+
         if (SqlUtils.isWildcardPath(path)) {
             this.table = SqlUtils.expandWildcardPath(this.jsonData, path);
         } else {
-            this.table = JsonUtils.getJsonObject(this.jsonData, path);
+            const parts = path.split('.');
+            let current = this.jsonData;
+
+            for (const part of parts) {
+                const cleanPart = part.startsWith('"') && part.endsWith('"') ? part.slice(1, -1) : part;
+                if (current && typeof current === 'object' && cleanPart in current) {
+                    current = current[cleanPart];
+                } else {
+                    current = null;
+                    break;
+                }
+            }
+
+            this.table = current;
         }
+
         return this;
     }
 
     validateTable() {
-        if (!SqlUtils.acceptsQueryOperations(this.table)) {
-            throw new Error('Table cannot be queried');
+        if (!this.table) {
+            throw new Error(`Table not found: ${this.tablePath}`);
         }
         return this;
     }
@@ -116,6 +202,10 @@ class QueryBuilder {
             this.results = allResults;
         } else if (this.limitValue && this.limitValue > 0) {
             this.results = allResults.slice(0, this.limitValue);
+        } else if (this.limitValue === null && this.isInCTE) {
+            this.results = allResults;
+        } else if (this.limitValue === null) {
+            this.results = allResults.slice(0, 100);
         } else {
             this.results = allResults.slice(0, 100);
         }
@@ -124,30 +214,29 @@ class QueryBuilder {
     }
 
     build() {
-        // Se for uma query UNION, processa as duas queries separadamente
         if (this.isUnion) {
             return this.executeUnion();
         }
-        
+
+        if (this.isJoinQuery) {
+            return this.executeJoin();
+        }
+
         return {
             results: this.results,
             totalResults: this.totalResults,
-            limited: this.limitValue !== -1 && this.totalResults > (this.limitValue || 100)
+            limited: this.limitValue !== -1 && this.totalResults > (this.limitValue || 100),
+            hasExplicitLimit: this.originalLimitValue !== null
         };
     }
 
     executeUnion() {
-        // Executa a query da esquerda
-        const leftResult = SqlUtils.executeSQL(this.jsonData, this.leftQuery);
-        // Executa a query da direita
-        const rightResult = SqlUtils.executeSQL(this.jsonData, this.rightQuery);
-        
-        // Calcula o total real baseado nos totalResults das queries individuais
+        const leftResult = SqlUtils.executeSQL(this.jsonData, this.leftQuery, this.cteContext, this.isInCTE);
+        const rightResult = SqlUtils.executeSQL(this.jsonData, this.rightQuery, this.cteContext, this.isInCTE);
         const totalResults = leftResult.totalResults + rightResult.totalResults;
-        
+
         let combinedResults = [...leftResult.results, ...rightResult.results];
-        
-        // Se for UNION (sem ALL), remove duplicatas
+
         if (!this.unionAll) {
             const seen = new Set();
             combinedResults = combinedResults.filter(row => {
@@ -159,61 +248,339 @@ class QueryBuilder {
                 return true;
             });
         }
-        
-        const limitValue = this.limitValue || 100;
-        const limited = this.limitValue !== -1 && totalResults > limitValue;
-        
-        // Aplica o limite se necessário
-        if (this.limitValue === -1) {
-            // Sem limite
-        } else {
+
+        let limitValue = this.limitValue;
+        if (limitValue === null && !this.isInCTE) {
+            limitValue = 100;
+        }
+
+        const limited = limitValue !== null && limitValue !== -1 && combinedResults.length > limitValue;
+
+        if (limitValue === -1) {
+        } else if (limitValue !== null) {
             combinedResults = combinedResults.slice(0, limitValue);
         }
-        
+
         return {
             results: combinedResults,
             totalResults: totalResults,
-            limited: limited
+            limited: limited,
+            hasExplicitLimit: this.originalLimitValue !== null
         };
+    }
+
+    executeJoin() {
+        const mainTable = this.getTableData(this.tablePath);
+        if (!Array.isArray(mainTable)) {
+            throw new Error('Tabela principal deve ser um array para JOIN');
+        }
+
+        let results = [];
+
+        for (const mainRow of mainTable) {
+            let currentRows = [mainRow];
+
+            for (const join of this.joins) {
+                const joinTable = this.getTableData(join.tablePath);
+                if (!Array.isArray(joinTable)) {
+                    continue;
+                }
+
+                const newRows = [];
+
+                for (const currentRow of currentRows) {
+                    let hasMatch = false;
+
+                    for (const joinRow of joinTable) {
+                        if (this.evaluateJoinCondition(currentRow, joinRow, join)) {
+                            hasMatch = true;
+                            const combinedRow = {...currentRow};
+
+                            Object.keys(joinRow).forEach(key => {
+                                const fieldName = join.alias ? `${join.alias}_${key}` : key;
+                                combinedRow[fieldName] = joinRow[key];
+                            });
+
+                            newRows.push(combinedRow);
+                        }
+                    }
+
+                    if (!hasMatch && (join.type === 'LEFT JOIN' || join.type === 'OUTER JOIN')) {
+                        const combinedRow = {...currentRow};
+                        if (joinTable.length > 0) {
+                            Object.keys(joinTable[0]).forEach(key => {
+                                const fieldName = join.alias ? `${join.alias}_${key}` : key;
+                                combinedRow[fieldName] = null;
+                            });
+                        }
+                        newRows.push(combinedRow);
+                    }
+                }
+
+                currentRows = newRows;
+            }
+
+            results = results.concat(currentRows);
+        }
+
+        if (this.whereClause) {
+            results = results.filter(row => {
+                try {
+                    return this.whereClause.call(row);
+                } catch (e) {
+                    return false;
+                }
+            });
+        }
+
+        const processedResults = this.processJoinColumns(results);
+
+        this.totalResults = processedResults.length;
+
+        let limitValue = this.limitValue;
+        if (limitValue === null && !this.isInCTE) {
+            limitValue = 100;
+        }
+
+        const limited = limitValue !== null && limitValue !== -1 && processedResults.length > limitValue;
+
+        if (limitValue === -1) {
+            this.results = processedResults;
+        } else if (limitValue !== null) {
+            this.results = processedResults.slice(0, limitValue);
+        } else {
+            this.results = processedResults;
+        }
+
+        return {
+            results: this.results,
+            totalResults: this.totalResults,
+            limited: limited,
+            hasExplicitLimit: this.originalLimitValue !== null
+        };
+    }
+
+    evaluateJoinCondition(leftRow, rightRow, join) {
+        const condition = join.onCondition;
+        const match = condition.match(/(\w+)\.(\w+)\s*=\s*(\w+)\.(\w+)/);
+
+        if (match) {
+            const [, leftAlias, leftField, rightAlias, rightField] = match;
+
+            if ((leftAlias === this.tableAlias || leftAlias === this.tablePath.split('.').pop()) &&
+                (rightAlias === join.alias || rightAlias === join.tablePath.split('.').pop())) {
+                return leftRow[leftField] === rightRow[rightField];
+            }
+
+            if ((rightAlias === this.tableAlias || rightAlias === this.tablePath.split('.').pop()) &&
+                (leftAlias === join.alias || leftAlias === join.tablePath.split('.').pop())) {
+                return rightRow[leftField] === leftRow[rightField];
+            }
+        }
+
+        return false;
+    }
+
+    getTableData(tablePath) {
+        if (this.cteContext[tablePath]) {
+            return this.cteContext[tablePath];
+        }
+
+        if (SqlUtils.isWildcardPath(tablePath)) {
+            return SqlUtils.expandWildcardPath(this.jsonData, tablePath);
+        } else {
+            const parts = tablePath.split('.');
+            let current = this.jsonData;
+
+            for (const part of parts) {
+                const cleanPart = part.startsWith('"') && part.endsWith('"') ? part.slice(1, -1) : part;
+                if (current && typeof current === 'object' && cleanPart in current) {
+                    current = current[cleanPart];
+                } else {
+                    return [];
+                }
+            }
+
+            return current || [];
+        }
+    }
+
+    processJoinColumns(results) {
+        if (results.length === 0) return [];
+
+        const columns = SqlUtils.buildColumnList(this.columns, results[0]);
+
+        return results.map(row => {
+            const processedRow = {};
+            columns.forEach(col => {
+                if (row.hasOwnProperty(col)) {
+                    processedRow[col] = row[col];
+                }
+            });
+            return processedRow;
+        });
     }
 }
 
 export class SqlUtils {
-    static executeSQL(jsonData, sqlQuery) {
-        try {
-            const builder = new QueryBuilder(jsonData).parseQuery(sqlQuery);
-            
-            // Se for uma query UNION, executa diretamente
-            if (builder.isUnion) {
-                return builder.build();
-            }
-            
-            return builder
-                .selectFrom()
-                .validateTable()
-                .processColumns()
-                .applyFilter()
-                .applyLimit()
-                .build();
-        } catch (error) {
-            debugError('Query execution failed:', error);
-            return {results: [], totalResults: 0, limited: false};
+    static executeSQL(jsonData, sqlQuery, cteContext = {}, isInCTE = false) {
+        if (SqlUtils.isWithQuery(sqlQuery)) {
+            return SqlUtils.executeWithQuery(jsonData, sqlQuery);
         }
+
+        const builder = new QueryBuilder(jsonData, cteContext, isInCTE).parseQuery(sqlQuery);
+
+        if (builder.isUnion || builder.isJoinQuery) {
+            return builder.build();
+        }
+
+        if (!isInCTE && builder.limitValue === null) {
+            builder.limitValue = 100;
+        }
+
+        return builder
+            .selectFrom()
+            .validateTable()
+            .processColumns()
+            .applyFilter()
+            .applyLimit()
+            .build();
     }
 
-    static acceptsQueryOperations(target) {
-        const isNull = target === null;
-        const isUndefined = target === undefined;
-        const isFunction = typeof target === 'function';
-        const isObject = typeof target === 'object';
+    static isWithQuery(query) {
+        return /^\s*WITH\s+/i.test(query.trim());
+    }
 
-        return !isNull && !isUndefined && !isFunction && isObject;
+    static isJoinQuery(query) {
+        return /\b(INNER\s+)?JOIN\b|\bLEFT\s+JOIN\b|\bRIGHT\s+JOIN\b|\bOUTER\s+JOIN\b|\bFULL\s+OUTER\s+JOIN\b/i.test(query);
+    }
+
+    static executeWithQuery(jsonData, sqlQuery) {
+        const query = sqlQuery.trim();
+
+        let parenDepth = 0;
+        let inString = false;
+        let stringChar = null;
+        let selectIndex = -1;
+
+        for (let i = 0; i < query.length; i++) {
+            const char = query[i];
+            const prevChar = i > 0 ? query[i - 1] : null;
+
+            if (!inString && (char === '"' || char === "'")) {
+                inString = true;
+                stringChar = char;
+            } else if (inString && char === stringChar && prevChar !== '\\') {
+                inString = false;
+                stringChar = null;
+            } else if (!inString) {
+                if (char === '(') {
+                    parenDepth++;
+                } else if (char === ')') {
+                    parenDepth--;
+                } else if (parenDepth === 0 && query.substring(i).match(/^SELECT\s+/i)) {
+                    selectIndex = i;
+                    break;
+                }
+            }
+        }
+
+        if (selectIndex === -1) {
+            throw new Error('Sintaxe WITH inválida: SELECT principal não encontrado');
+        }
+
+        const withClause = query.substring(4, selectIndex).trim();
+        const mainQuery = query.substring(selectIndex).trim();
+
+        const cteContext = SqlUtils.parseWithClause(jsonData, withClause);
+
+        return SqlUtils.executeSQL(jsonData, mainQuery, cteContext);
+    }
+
+    static parseWithClause(jsonData, withClause) {
+        const cteContext = {};
+
+        const ctes = SqlUtils.splitCTEs(withClause);
+
+        for (const cte of ctes) {
+            const cteMatch = cte.trim().match(/^(\w+)\s+AS\s*\((.+)\)$/is);
+            if (!cteMatch) {
+                throw new Error(`Sintaxe CTE inválida: ${cte}`);
+            }
+
+            const cteName = cteMatch[1].trim();
+            let cteQuery = cteMatch[2].trim();
+
+            const cteResult = SqlUtils.executeSQL(jsonData, cteQuery, cteContext, true);
+            cteContext[cteName] = cteResult.results;
+        }
+
+        return cteContext;
+    }
+
+    static parseTableAlias(fromClause) {
+        fromClause = fromClause.trim();
+
+        const asMatch = fromClause.match(/^(.+?)\s+AS\s+(\w+)$/i);
+        if (asMatch) {
+            return {tablePath: asMatch[1].trim(), alias: asMatch[2].trim()};
+        }
+
+        const quotedTableMatch = fromClause.match(/^(.+?"[^"]+")\s+(\w+)$/);
+        if (quotedTableMatch) {
+            return {tablePath: quotedTableMatch[1].trim(), alias: quotedTableMatch[2].trim()};
+        }
+
+        const normalTableMatch = fromClause.match(/^([^\s]+\.[^\s]+)\s+(\w+)$/);
+        if (normalTableMatch) {
+            return {tablePath: normalTableMatch[1].trim(), alias: normalTableMatch[2].trim()};
+        }
+
+        return {tablePath: fromClause, alias: null};
+    }
+
+    static splitCTEs(withClause) {
+        const ctes = [];
+        let current = '';
+        let parenDepth = 0;
+        let inString = false;
+        let stringChar = null;
+
+        for (let i = 0; i < withClause.length; i++) {
+            const char = withClause[i];
+            const prevChar = i > 0 ? withClause[i - 1] : null;
+
+            if (!inString && (char === '"' || char === "'")) {
+                inString = true;
+                stringChar = char;
+            } else if (inString && char === stringChar && prevChar !== '\\') {
+                inString = false;
+                stringChar = null;
+            } else if (!inString) {
+                if (char === '(') {
+                    parenDepth++;
+                } else if (char === ')') {
+                    parenDepth--;
+                } else if (char === ',' && parenDepth === 0) {
+                    ctes.push(current.trim());
+                    current = '';
+                    continue;
+                }
+            }
+
+            current += char;
+        }
+
+        if (current.trim()) {
+            ctes.push(current.trim());
+        }
+
+        return ctes;
     }
 
     static buildColumnList(columnDefinition, sourceData) {
         class ColumnListBuilder {
             constructor(data) {
-                // Para wildcards com dados heterogêneos, coletamos todas as colunas possíveis
                 if (Array.isArray(data) && data.length > 0) {
                     const allKeys = new Set();
                     data.forEach(item => {
@@ -239,12 +606,11 @@ export class SqlUtils {
             }
 
             fromString(str) {
-                // Verifica se há uma combinação de colunas específicas com wildcard
                 if (str.includes('*') && str.includes(',')) {
                     const parts = str.split(',').map(c => c.trim());
                     const specificColumns = [];
                     let hasWildcard = false;
-                    
+
                     parts.forEach(part => {
                         if (part === '*') {
                             hasWildcard = true;
@@ -252,16 +618,15 @@ export class SqlUtils {
                             specificColumns.push(part);
                         }
                     });
-                    
+
                     if (hasWildcard) {
-                        // Pega todas as colunas e remove as que já foram especificadas
                         const allColumns = Object.keys(this.referenceRow);
                         const remainingColumns = allColumns.filter(col => !specificColumns.includes(col));
                         this.columns = [...specificColumns, ...remainingColumns];
                         return this;
                     }
                 }
-                
+
                 this.columns = str.includes(',')
                     ? str.split(',').map(c => c.trim())
                     : [str.trim()];
@@ -269,7 +634,6 @@ export class SqlUtils {
             }
 
             validate() {
-                // Para dados heterogêneos, não validamos se todas as colunas existem em todos os objetos
                 return this.columns;
             }
         }
@@ -283,26 +647,7 @@ export class SqlUtils {
         return [];
     }
 
-    static isValidColumn(columns, tableObj) {
-        for (let i = 0; i < columns.length; i++) {
-            const columnName = columns[i];
-            if (!columnName || columnName.trim() === '') {
-                return false;
-            }
-
-            if (JsonUtils.containsPathSeparator(columnName)) {
-                const valueObj = JsonUtils.getJsonObject(tableObj, columnName);
-                if (valueObj === undefined || typeof valueObj === 'function') {
-                    return false;
-                }
-            } else if (!tableObj.hasOwnProperty(columnName)) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    static getWhereClauseFn(jsString) {
+    static getWhereClauseFn(jsString, tableAlias = null, tablePath = null) {
         if (!jsString || jsString.trim() === "") {
             return function () {
                 return true;
@@ -310,7 +655,20 @@ export class SqlUtils {
         }
 
         try {
-            let jsCode = jsString
+            let jsCode = jsString;
+
+            if (tableAlias) {
+                const aliasRegex = new RegExp(`\\b${tableAlias}\\.(\\w+)`, 'g');
+                jsCode = jsCode.replace(aliasRegex, '$1');
+            }
+
+            if (tablePath) {
+                const escapedTablePath = tablePath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const tableRegex = new RegExp(`\\b${escapedTablePath}\\.(\\w+)`, 'g');
+                jsCode = jsCode.replace(tableRegex, '$1');
+            }
+
+            jsCode = jsCode
                 .replace(/\b(\w+)\s+ILIKE\s+'([^']*)'/gi, (match, field, pattern) => {
                     const regexPattern = pattern.replace(/%/g, '.*').replace(/_/g, '.');
                     return `(this.${field} && /${regexPattern}/i.test(this.${field}))`;
@@ -429,7 +787,7 @@ export class SqlUtils {
             const funcName = match[1].toUpperCase();
             const field = match[2].trim();
 
-            let values = [];
+            let values;
             if (field === '*') {
                 values = filteredData;
             } else {
@@ -471,11 +829,9 @@ export class SqlUtils {
 
     static expandWildcardPath(jsonData, path) {
         const parts = path.split('.');
-        let result = [];
-        
+
         function processWildcard(obj, remainingParts) {
             if (remainingParts.length === 0) {
-                // Fim do caminho - retorna o objeto se for array, ou seus arrays filhos
                 if (Array.isArray(obj)) {
                     return obj;
                 } else if (obj && typeof obj === 'object') {
@@ -490,19 +846,17 @@ export class SqlUtils {
                 }
                 return [];
             }
-            
+
             const [currentPart, ...restParts] = remainingParts;
             let collected = [];
-            
+
             if (currentPart === '*') {
                 if (Array.isArray(obj)) {
-                    // Para cada item do array, processa o resto do caminho
                     obj.forEach(item => {
                         const subResult = processWildcard(item, restParts);
                         collected = collected.concat(subResult);
                     });
                 } else if (obj && typeof obj === 'object') {
-                    // Para cada propriedade do objeto, processa o resto do caminho
                     Object.keys(obj).forEach(key => {
                         const value = obj[key];
                         const subResult = processWildcard(value, restParts);
@@ -510,20 +864,19 @@ export class SqlUtils {
                     });
                 }
             } else {
-                // Parte específica do caminho
-                const cleanPart = currentPart.startsWith('"') && currentPart.endsWith('"') 
-                    ? currentPart.slice(1, -1) 
+                const cleanPart = currentPart.startsWith('"') && currentPart.endsWith('"')
+                    ? currentPart.slice(1, -1)
                     : currentPart;
-                    
+
                 if (obj && typeof obj === 'object' && cleanPart in obj) {
                     const subResult = processWildcard(obj[cleanPart], restParts);
                     collected = collected.concat(subResult);
                 }
             }
-            
+
             return collected;
         }
-        
+
         return processWildcard(jsonData, parts);
     }
 }

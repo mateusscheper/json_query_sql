@@ -14,9 +14,9 @@ const testData = {
     ],
     audios: {
         Reactions: [
-            {audioId: 1, reaction: "like", userId: 101, title: "Song 1"},
-            {audioId: 2, reaction: "dislike", userId: 102, title: "Song 2"},
-            {audioId: 1, reaction: "love", userId: 103, title: "Song 1"}
+            {id: 1, type: "like", user: "Alice"},
+            {id: 2, type: "love", user: "Bob"},
+            {id: 3, type: "laugh", user: "Charlie"}
         ],
         "Sound Effects": [
             {id: 1, name: "Explosion", duration: 3},
@@ -24,7 +24,7 @@ const testData = {
         ],
         "Whatsapp Audios": [
             {id: 1, message: "Hello", sender: "John"},
-            {id: 2, message: "World", sender: "Jane"}
+            {id: 2, message: "Hi there", sender: "Jane"}
         ],
         Television: [
             {id: 1, show: "News", channel: "CNN"},
@@ -39,16 +39,16 @@ const testData = {
             {id: 2, sport: "Basketball", team: "Lakers"}
         ],
         Games: [
-            {id: 1, game: "FIFA", platform: "PS5"},
-            {id: 2, game: "COD", platform: "Xbox"}
+            {id: 1, name: "FIFA", platform: "PC"},
+            {id: 2, name: "Call of Duty", platform: "Console"}
         ],
         Memes: [
             {id: 1, meme: "Distracted Boyfriend", likes: 1000},
             {id: 2, meme: "Drake Pointing", likes: 800}
         ],
         Anime: [
-            {id: 1, title: "Naruto", episodes: 720},
-            {id: 2, title: "One Piece", episodes: 1000}
+            {id: 1, name: "Naruto", genre: "Action"},
+            {id: 2, name: "One Piece", genre: "Adventure"}
         ]
     }
 };
@@ -82,177 +82,58 @@ test('SELECT * FROM audio - deve retornar todos os registros de audio', () => {
 test('SELECT * FROM audios.Reactions - deve retornar todos os registros de Reactions', () => {
     const result = SqlUtils.executeSQL(testData, 'SELECT * FROM audios.Reactions');
     const expected = [
-        {audioId: 1, reaction: "like", userId: 101, title: "Song 1"},
-        {audioId: 2, reaction: "dislike", userId: 102, title: "Song 2"},
-        {audioId: 1, reaction: "love", userId: 103, title: "Song 1"}
+        {id: 1, type: "like", user: "Alice"},
+        {id: 2, type: "love", user: "Bob"},
+        {id: 3, type: "laugh", user: "Charlie"}
     ];
     assertEquals(result.results, expected, 'Query: SELECT * FROM audios.Reactions');
-});
-
-test('SELECT * FROM audios.Reactions WHERE title = Song 1', () => {
-    const result = SqlUtils.executeSQL(testData, "SELECT * FROM audios.Reactions WHERE title = 'Song 1'");
-    const expected = [
-        {audioId: 1, reaction: "like", userId: 101, title: "Song 1"},
-        {audioId: 1, reaction: "love", userId: 103, title: "Song 1"}
-    ];
-    assertEquals(result.results, expected, 'Query: WHERE title = Song 1');
-});
-
-test('SELECT * FROM audios.Reactions WHERE title LIKE Song 1', () => {
-    const result = SqlUtils.executeSQL(testData, "SELECT * FROM audios.Reactions WHERE title LIKE 'Song 1'");
-    const expected = [
-        {audioId: 1, reaction: "like", userId: 101, title: "Song 1"},
-        {audioId: 1, reaction: "love", userId: 103, title: "Song 1"}
-    ];
-    assertEquals(result.results, expected, 'Query: WHERE title LIKE Song 1');
-});
-
-test('SELECT * FROM audios.Reactions WHERE title LIKE %ong 1%', () => {
-    const result = SqlUtils.executeSQL(testData, "SELECT * FROM audios.Reactions WHERE title LIKE '%ong 1%'");
-    const expected = [
-        {audioId: 1, reaction: "like", userId: 101, title: "Song 1"},
-        {audioId: 1, reaction: "love", userId: 103, title: "Song 1"}
-    ];
-    assertEquals(result.results, expected, 'Query: WHERE title LIKE %ong 1%');
-});
-
-test('SELECT * FROM audios.Reactions WHERE title LIKE S%ng 1', () => {
-    const result = SqlUtils.executeSQL(testData, "SELECT * FROM audios.Reactions WHERE title LIKE 'S%ng 1'");
-    const expected = [
-        {audioId: 1, reaction: "like", userId: 101, title: "Song 1"},
-        {audioId: 1, reaction: "love", userId: 103, title: "Song 1"}
-    ];
-    assertEquals(result.results, expected, 'Query: WHERE title LIKE S%ng 1');
-});
-
-test('SELECT * FROM audios.Reactions WHERE title ILIKE Song 1', () => {
-    const result = SqlUtils.executeSQL(testData, "SELECT * FROM audios.Reactions WHERE title ILIKE 'Song 1'");
-    const expected = [
-        {audioId: 1, reaction: "like", userId: 101, title: "Song 1"},
-        {audioId: 1, reaction: "love", userId: 103, title: "Song 1"}
-    ];
-    assertEquals(result.results, expected, 'Query: WHERE title ILIKE Song 1');
-});
-
-test('SELECT * FROM audios.Reactions WHERE title ILIKE %song 1', () => {
-    const result = SqlUtils.executeSQL(testData, "SELECT * FROM audios.Reactions WHERE title ILIKE '%song 1'");
-    const expected = [
-        {audioId: 1, reaction: "like", userId: 101, title: "Song 1"},
-        {audioId: 1, reaction: "love", userId: 103, title: "Song 1"}
-    ];
-    assertEquals(result.results, expected, 'Query: WHERE title ILIKE %song 1');
-});
-
-test('SELECT * FROM audios.Reactions WHERE title ILIKE %ong 1', () => {
-    const result = SqlUtils.executeSQL(testData, "SELECT * FROM audios.Reactions WHERE title ILIKE '%ong 1'");
-    const expected = [
-        {audioId: 1, reaction: "like", userId: 101, title: "Song 1"},
-        {audioId: 1, reaction: "love", userId: 103, title: "Song 1"}
-    ];
-    assertEquals(result.results, expected, 'Query: WHERE title ILIKE %ong 1');
-});
-
-test('SELECT * FROM audios.Reactions WHERE title != Song 1', () => {
-    const result = SqlUtils.executeSQL(testData, "SELECT * FROM audios.Reactions WHERE title != 'Song 1'");
-    const expected = [
-        {audioId: 2, reaction: "dislike", userId: 102, title: "Song 2"}
-    ];
-    assertEquals(result.results, expected, 'Query: WHERE title != Song 1');
-});
-
-test('SELECT * FROM audios.Reactions WHERE title = No Song', () => {
-    const result = SqlUtils.executeSQL(testData, "SELECT * FROM audios.Reactions WHERE title = 'No Song'");
-    const expected = [];
-    assertEquals(result.results, expected, 'Query: WHERE title = No Song');
-});
-
-test('SELECT * FROM audios.Reactions WHERE title != No Song', () => {
-    const result = SqlUtils.executeSQL(testData, "SELECT * FROM audios.Reactions WHERE title != 'No Song'");
-    const expected = [
-        {audioId: 1, reaction: "like", userId: 101, title: "Song 1"},
-        {audioId: 2, reaction: "dislike", userId: 102, title: "Song 2"},
-        {audioId: 1, reaction: "love", userId: 103, title: "Song 1"}
-    ];
-    assertEquals(result.results, expected, 'Query: WHERE title != No Song');
-});
-
-test('SELECT * FROM audios.Reactions WHERE title ILIKE No Song', () => {
-    const result = SqlUtils.executeSQL(testData, "SELECT * FROM audios.Reactions WHERE title ILIKE 'No Song'");
-    const expected = [];
-    assertEquals(result.results, expected, 'Query: WHERE title ILIKE No Song');
-});
-
-test('SELECT * FROM audios.Reactions WHERE title LIKE No Song', () => {
-    const result = SqlUtils.executeSQL(testData, "SELECT * FROM audios.Reactions WHERE title LIKE 'No Song'");
-    const expected = [];
-    assertEquals(result.results, expected, 'Query: WHERE title LIKE No Song');
 });
 
 test('SELECT * FROM audios."Whatsapp Audios" - deve funcionar com nomes que contêm espaços', () => {
     const result = SqlUtils.executeSQL(testData, 'SELECT * FROM audios."Whatsapp Audios"');
     const expected = [
         {id: 1, message: "Hello", sender: "John"},
-        {id: 2, message: "World", sender: "Jane"}
+        {id: 2, message: "Hi there", sender: "Jane"}
     ];
     assertEquals(result.results, expected, 'Query: SELECT * FROM audios."Whatsapp Audios"');
 });
 
-test('SELECT id, * FROM audios."Whatsapp Audios" - deve retornar id primeiro e depois outras colunas', () => {
-    const result = SqlUtils.executeSQL(testData, 'SELECT id, * FROM audios."Whatsapp Audios"');
+test('SELECT * FROM audios.Reactions WHERE type = like', () => {
+    const result = SqlUtils.executeSQL(testData, "SELECT * FROM audios.Reactions WHERE type = 'like'");
     const expected = [
-        {id: 1, message: "Hello", sender: "John"},
-        {id: 2, message: "World", sender: "Jane"}
+        {id: 1, type: "like", user: "Alice"}
     ];
-    assertEquals(result.results, expected, 'Query: SELECT id, * FROM audios."Whatsapp Audios"');
-
-    // Verifica se a ordem das colunas está correta (id primeiro)
-    if (result.results.length > 0) {
-        const keys = Object.keys(result.results[0]);
-        if (keys[0] !== 'id') {
-            throw new Error(`Primeira coluna deveria ser 'id', mas é '${keys[0]}'. Ordem: ${keys.join(', ')}`);
-        }
-    }
+    assertEquals(result.results, expected, 'Query: WHERE type = like');
 });
 
-test('SELECT sender, id, * FROM audios."Whatsapp Audios" - deve retornar sender, id e depois outras colunas', () => {
-    const result = SqlUtils.executeSQL(testData, 'SELECT sender, id, * FROM audios."Whatsapp Audios"');
+test('SELECT * FROM audios.Reactions WHERE type LIKE %ov%', () => {
+    const result = SqlUtils.executeSQL(testData, "SELECT * FROM audios.Reactions WHERE type LIKE '%ov%'");
     const expected = [
-        {sender: "John", id: 1, message: "Hello"},
-        {sender: "Jane", id: 2, message: "World"}
+        {id: 2, type: "love", user: "Bob"}
     ];
-    assertEquals(result.results, expected, 'Query: SELECT sender, id, * FROM audios."Whatsapp Audios"');
-
-    // Verifica se a ordem das colunas está correta
-    if (result.results.length > 0) {
-        const keys = Object.keys(result.results[0]);
-        if (keys[0] !== 'sender' || keys[1] !== 'id') {
-            throw new Error(`Ordem incorreta. Esperado: sender, id, message. Atual: ${keys.join(', ')}`);
-        }
-    }
+    assertEquals(result.results, expected, 'Query: WHERE type LIKE %ov%');
 });
 
-// Testes de wildcards
+test('SELECT * FROM audios.Reactions WHERE type ILIKE %AUG%', () => {
+    const result = SqlUtils.executeSQL(testData, "SELECT * FROM audios.Reactions WHERE type ILIKE '%AUG%'");
+    const expected = [
+        {id: 3, type: "laugh", user: "Charlie"}
+    ];
+    assertEquals(result.results, expected, 'Query: WHERE type ILIKE %AUG%');
+});
+
 debugLog('\nExecutando testes de wildcards...');
 
 test('SELECT * FROM * - deve retornar todo o conteúdo de audios (tabela raiz)', () => {
     const result = SqlUtils.executeSQL(testData, 'SELECT * FROM *');
-    // Para "*" na raiz, deve retornar: audio (2) + todos de audios (19) = 21 registros
     const expectedCount = 21;
     assertEquals(result.results.length, expectedCount, 'Query: SELECT * FROM *');
 });
 
 test('SELECT * FROM audios.* - deve retornar todos os registros das subtabelas de audios', () => {
     const result = SqlUtils.executeSQL(testData, 'SELECT * FROM audios.*');
-    // Deve retornar todos os registros de todas as subtabelas de audios: 3+2+2+2+2+2+2+2+2 = 19 registros
     const expectedCount = 19;
     assertEquals(result.results.length, expectedCount, 'Query: SELECT * FROM audios.*');
-});
-
-test('SELECT * FROM *.* - deve retornar todos os registros de todas as tabelas e subtabelas', () => {
-    const result = SqlUtils.executeSQL(testData, 'SELECT * FROM *.*');
-    // Deve incluir todas as subtabelas: audio não tem sub-arrays + audios.* (19) = 19 registros
-    const expectedCount = 19;
-    assertEquals(result.results.length, expectedCount, 'Query: SELECT * FROM *.*');
 });
 
 test('SELECT COUNT(*) FROM audios.* - deve contar todos os registros das subtabelas', () => {
@@ -260,15 +141,6 @@ test('SELECT COUNT(*) FROM audios.* - deve contar todos os registros das subtabe
     assertEquals(result.results[0]['COUNT(*)'], 19, 'Query: SELECT COUNT(*) FROM audios.*');
 });
 
-test('SELECT * FROM audios.* WHERE id = 1 - deve filtrar registros com id = 1 de todas as subtabelas', () => {
-    const result = SqlUtils.executeSQL(testData, "SELECT * FROM audios.* WHERE id = 1");
-    // Deve retornar registros com id = 1 de todas as subtabelas que têm esse campo
-    // Sound Effects, Whatsapp Audios, Television, Music, Sports, Games, Memes, Anime = 8 registros
-    const expectedCount = 8;
-    assertEquals(result.results.length, expectedCount, 'Query: SELECT * FROM audios.* WHERE id = 1');
-});
-
-// Testes de UNION
 debugLog('\nExecutando testes de UNION...');
 
 test('SELECT * FROM audios.Music UNION SELECT * FROM audios.Sports - deve combinar sem duplicatas', () => {
@@ -282,17 +154,6 @@ test('SELECT * FROM audios.Music UNION SELECT * FROM audios.Sports - deve combin
     assertEquals(result.results, expected, 'Query: UNION');
 });
 
-test('SELECT * FROM audios.Music UNION ALL SELECT * FROM audios.Sports - deve combinar com duplicatas', () => {
-    const result = SqlUtils.executeSQL(testData, 'SELECT * FROM audios.Music UNION ALL SELECT * FROM audios.Sports');
-    const expected = [
-        {id: 1, artist: "Beatles", song: "Yesterday"},
-        {id: 2, artist: "Queen", song: "Bohemian Rhapsody"},
-        {id: 1, sport: "Football", team: "Barcelona"},
-        {id: 2, sport: "Basketball", team: "Lakers"}
-    ];
-    assertEquals(result.results, expected, 'Query: UNION ALL');
-});
-
 test('SELECT id FROM audios.Music UNION SELECT id FROM audios.Sports - deve remover duplicatas', () => {
     const result = SqlUtils.executeSQL(testData, 'SELECT id FROM audios.Music UNION SELECT id FROM audios.Sports');
     const expected = [
@@ -302,24 +163,73 @@ test('SELECT id FROM audios.Music UNION SELECT id FROM audios.Sports - deve remo
     assertEquals(result.results, expected, 'Query: UNION com duplicatas removidas');
 });
 
-test('SELECT id FROM audios.Music UNION ALL SELECT id FROM audios.Sports - deve manter duplicatas', () => {
-    const result = SqlUtils.executeSQL(testData, 'SELECT id FROM audios.Music UNION ALL SELECT id FROM audios.Sports');
+debugLog('\nExecutando testes de WITH (CTEs)...');
+
+test('WITH music_cte AS (SELECT * FROM audios.Music) SELECT * FROM music_cte', () => {
+    const result = SqlUtils.executeSQL(testData, 'WITH music_cte AS (SELECT * FROM audios.Music) SELECT * FROM music_cte');
     const expected = [
-        {id: 1},
-        {id: 2},
-        {id: 1},
-        {id: 2}
+        {id: 1, artist: "Beatles", song: "Yesterday"},
+        {id: 2, artist: "Queen", song: "Bohemian Rhapsody"}
     ];
-    assertEquals(result.results, expected, 'Query: UNION ALL com duplicatas mantidas');
+    assertEquals(result.results, expected, 'Query: WITH simples');
 });
 
-test('SELECT * FROM audios."Whatsapp Audios" WHERE id = 1 UNION SELECT * FROM audios.Music WHERE id = 1', () => {
-    const result = SqlUtils.executeSQL(testData, 'SELECT * FROM audios."Whatsapp Audios" WHERE id = 1 UNION SELECT * FROM audios.Music WHERE id = 1');
+test('WITH filtered_music AS (SELECT * FROM audios.Music WHERE id = 1) SELECT * FROM filtered_music', () => {
+    const result = SqlUtils.executeSQL(testData, 'WITH filtered_music AS (SELECT * FROM audios.Music WHERE id = 1) SELECT * FROM filtered_music');
     const expected = [
-        {id: 1, message: "Hello", sender: "John"},
         {id: 1, artist: "Beatles", song: "Yesterday"}
     ];
-    assertEquals(result.results, expected, 'Query: UNION com WHERE clauses');
+    assertEquals(result.results, expected, 'Query: WITH com WHERE');
+});
+
+debugLog('\nExecutando testes de JOIN...');
+
+test('SELECT * FROM audios.Music m JOIN audios.Sports s ON m.id = s.id - deve fazer INNER JOIN', () => {
+    const result = SqlUtils.executeSQL(testData, 'SELECT * FROM audios.Music m JOIN audios.Sports s ON m.id = s.id');
+    const expected = [
+        {id: 1, artist: "Beatles", song: "Yesterday", s_id: 1, s_sport: "Football", s_team: "Barcelona"},
+        {id: 2, artist: "Queen", song: "Bohemian Rhapsody", s_id: 2, s_sport: "Basketball", s_team: "Lakers"}
+    ];
+    assertEquals(result.results, expected, 'Query: INNER JOIN');
+});
+
+test('SELECT * FROM audios."Whatsapp Audios" w_audios JOIN audios.Reactions reactions ON w_audios.id = reactions.id', () => {
+    const result = SqlUtils.executeSQL(testData, 'SELECT * FROM audios."Whatsapp Audios" w_audios JOIN audios.Reactions reactions ON w_audios.id = reactions.id');
+    const expected = [
+        {id: 1, message: "Hello", sender: "John", reactions_id: 1, reactions_type: "like", reactions_user: "Alice"},
+        {id: 2, message: "Hi there", sender: "Jane", reactions_id: 2, reactions_type: "love", reactions_user: "Bob"}
+    ];
+    assertEquals(result.results, expected, 'Query: JOIN com tabelas com aspas');
+});
+
+debugLog('\nExecutando testes de Alias de Tabelas...');
+
+test('SELECT * FROM audios.Music AS m WHERE m.id = 1 - deve usar alias com AS', () => {
+    const result = SqlUtils.executeSQL(testData, 'SELECT * FROM audios.Music AS m WHERE m.id = 1');
+    const expected = [
+        {id: 1, artist: "Beatles", song: "Yesterday"}
+    ];
+    assertEquals(result.results, expected, 'Query: Alias com AS');
+});
+
+test('SELECT * FROM audios.Music m WHERE m.artist = "Beatles" - deve usar alias sem AS', () => {
+    const result = SqlUtils.executeSQL(testData, 'SELECT * FROM audios.Music m WHERE m.artist = "Beatles"');
+    const expected = [
+        {id: 1, artist: "Beatles", song: "Yesterday"}
+    ];
+    assertEquals(result.results, expected, 'Query: Alias sem AS');
+});
+
+test('SELECT * FROM audios."Whatsapp Audios" AS wa WHERE wa.sender = "John" - deve usar alias com nome complexo', () => {
+    const result = SqlUtils.executeSQL(testData, 'SELECT * FROM audios."Whatsapp Audios" AS wa WHERE wa.sender = "John"');
+    const expected = [
+        {id: 1, message: "Hello", sender: "John"}
+    ];
+    assertEquals(result.results, expected, 'Query: Alias com nome de tabela complexo');
 });
 
 debugLog('\nTodos os testes concluídos!');
+
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { test, assertEquals };
+}

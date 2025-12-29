@@ -27,10 +27,12 @@ const forceEnableViewer = ref(false)
 const fileSize = ref(0)
 const isExecutingQuery = ref(false)
 const queryLimited = ref(false)
+const hasExplicitLimit = ref(false)
 const totalResults = ref(0)
 const isLoading = ref(true)
 const queryHistory = ref([])
 const topHeight = ref(45)
+const hasExecutedQuery = ref(false)
 
 const confirm = useConfirm()
 
@@ -66,13 +68,11 @@ const jsonSummary = computed(() => {
 const saveToSession = async () => {
   if (jsonData.value) {
     try {
-      // Tentar sessionStorage primeiro para arquivos pequenos
-      if (fileSize.value < 2 * 1024 * 1024) { // < 2MB
+      if (fileSize.value < 2 * 1024 * 1024) {
         sessionStorage.setItem('jsonData', JSON.stringify(jsonData.value))
         sessionStorage.setItem('fileName', jsonFile.value?.name || 'uploaded.json')
         sessionStorage.setItem('fileSize', fileSize.value.toString())
       } else {
-        // Usar IndexedDB para arquivos grandes
         await jsonCache.save(jsonData.value, jsonFile.value?.name || 'uploaded.json', fileSize.value)
       }
     } catch (error) {
@@ -83,13 +83,11 @@ const saveToSession = async () => {
 }
 
 const loadFromSession = async () => {
-  // Carregar histórico de queries
   const savedHistory = localStorage.getItem('queryHistory')
   if (savedHistory) {
     queryHistory.value = JSON.parse(savedHistory)
   }
 
-  // Tentar sessionStorage primeiro
   const savedData = sessionStorage.getItem('jsonData')
   if (savedData) {
     const savedFileName = sessionStorage.getItem('fileName')
@@ -107,7 +105,6 @@ const loadFromSession = async () => {
     return
   }
 
-  // Tentar IndexedDB se não encontrou no sessionStorage
   try {
     const cacheData = await jsonCache.load()
     if (cacheData) {
@@ -131,7 +128,7 @@ const onFileSelect = (event) => {
   const file = event.files[0]
   if (file && file.type === 'application/json' || file.name.toLowerCase().endsWith('.json')) {
     fileSize.value = file.size
-    jsonViewerDisabled.value = file.size > 2 * 1024 * 1024 // 2MB
+    jsonViewerDisabled.value = file.size > 2 * 1024 * 1024
     forceEnableViewer.value = false
 
     const reader = new FileReader()
@@ -166,22 +163,71 @@ const executeQuery = async () => {
 
     const result = SqlUtils.executeSQL(jsonDB.value, sqlQuery.value)
 
+    queryResults.value = result.results || []
+    totalResults.value = result.totalResults || 0
+    queryLimited.value = result.limited || false
+    hasExplicitLimit.value = result.hasExplicitLimit || false
+    hasExecutedQuery.value = true
+    
     if (result.results && result.results.length > 0) {
-      queryResults.value = result.results
-      totalResults.value = result.totalResults
-      queryLimited.value = result.limited
       columnNames.value = Object.keys(result.results[0])
-      addToHistory(sqlQuery.value.trim())
     } else {
-      queryResults.value = []
-      columnNames.value = []
-      totalResults.value = 0
+      columnNames.value = extractColumnsFromQuery(sqlQuery.value.trim())
+    }
+    
+    if (sqlQuery.value.trim()) {
+      addToHistory(sqlQuery.value.trim())
     }
   } catch (error) {
     console.error('Erro ao executar query:', error)
+    queryResults.value = []
+    columnNames.value = []
+    totalResults.value = 0
+    queryLimited.value = false
+    hasExplicitLimit.value = false
+    hasExecutedQuery.value = true
   } finally {
     isExecutingQuery.value = false
   }
+}
+
+const extractColumnsFromQuery = (query) => {
+  const selectMatch = query.match(/SELECT\s+(.+?)\s+FROM/i)
+  if (selectMatch) {
+    const columns = selectMatch[1].trim()
+    if (columns === '*') {
+      const fromMatch = query.match(/FROM\s+([^\s]+)/i)
+      if (fromMatch) {
+        const tablePath = fromMatch[1].trim().replace(/"/g, '')
+        const tableData = getTableDataForColumns(tablePath)
+        if (tableData && tableData.length > 0) {
+          return Object.keys(tableData[0])
+        }
+      }
+      return []
+    } else {
+      return columns.split(',').map(col => col.trim().replace(/.*\./g, ''))
+    }
+  }
+  return []
+}
+
+const getTableDataForColumns = (tablePath) => {
+  if (!jsonDB.value) return null
+  
+  const parts = tablePath.split('.')
+  let current = jsonDB.value
+  
+  for (const part of parts) {
+    const cleanPart = part.startsWith('"') && part.endsWith('"') ? part.slice(1, -1) : part
+    if (current && typeof current === 'object' && cleanPart in current) {
+      current = current[cleanPart]
+    } else {
+      return null
+    }
+  }
+  
+  return Array.isArray(current) ? current : null
 }
 
 onMounted(async () => {
@@ -203,7 +249,9 @@ const removeFile = async () => {
   showJsonViewer.value = false
   isExecutingQuery.value = false
   queryLimited.value = false
+  hasExplicitLimit.value = false
   totalResults.value = 0
+  hasExecutedQuery.value = false
   sessionStorage.removeItem('jsonData')
   sessionStorage.removeItem('fileName')
   sessionStorage.removeItem('fileSize')
@@ -300,7 +348,7 @@ const confirmRemoveFile = () => {
                 @keyup.ctrl.enter="executeQuery"
             />
             <Message
-                v-if="queryLimited && !isExecutingQuery"
+                v-if="queryLimited && !hasExplicitLimit && !isExecutingQuery"
                 severity="info"
                 :closable="false"
                 class="textarea-message"
@@ -351,7 +399,7 @@ const confirmRemoveFile = () => {
           </div>
 
           <DataTable
-              v-else-if="queryResults.length > 0"
+              v-else-if="hasExecutedQuery && (columnNames.length > 0 || queryResults.length > 0)"
               :value="queryResults"
               scrollable
               scrollHeight="100%"
@@ -372,10 +420,30 @@ const confirmRemoveFile = () => {
                 :field="col"
                 :header="col"
             />
+            <template v-if="queryResults.length === 0" #empty>
+              <div class="empty-results">
+                0 resultados encontrados
+              </div>
+            </template>
           </DataTable>
 
-          <div v-else-if="!isExecutingQuery" class="no-results">
+          <div v-else-if="!isExecutingQuery && !hasExecutedQuery" class="no-results">
             Execute uma query para ver os resultados (Ctrl+Enter)
+          </div>
+          
+          <div v-else-if="!isExecutingQuery && hasExecutedQuery && queryResults.length === 0" class="no-results">
+            <DataTable
+                :value="[]"
+                scrollable
+                scrollHeight="100%"
+                class="results-table"
+            >
+              <template #empty>
+                <div class="empty-results">
+                  0 resultados encontrados
+                </div>
+              </template>
+            </DataTable>
           </div>
         </div>
 
