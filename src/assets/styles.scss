@@ -235,7 +235,7 @@ body {
 }
 
 .tables-section {
-  
+
 }
 
 .tables-title {
@@ -271,9 +271,13 @@ body {
   font-style: italic;
 }
 
-.dialog-container {
+.json-viewer-dialog-container {
   width: 80vw;
   height: 80vh;
+
+  .p-dialog-content, .dialog-viewer {
+    height: 100%;
+  }
 }
 
 .dialog-warning {

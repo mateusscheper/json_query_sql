@@ -1,0 +1,34 @@
+{
+  "upload": {
+    "selectFile": "Seleccionar archivo JSON"
+  },
+  "query": {
+    "placeholder": "Escribe tu consulta SQL aquí (ej: SELECT * FROM dataArray WHERE id > 1) - Presiona Ctrl+Enter para ejecutar",
+    "execute": "Ejecutar",
+    "history": "Historial de consultas",
+    "noHistory": "Aún no se han ejecutado consultas",
+    "noResults": "Ejecuta una consulta para ver resultados (Ctrl+Enter)",
+    "emptyResults": "0 resultados encontrados",
+    "limitedResults": "Mostrando {{current}} de {{total}} resultados. Usa \"LIMIT X\" para especificar un límite o \"LIMIT -1\" para quitar la limitación."
+  },
+  "file": {
+    "file": "Archivo:",
+    "size": "Tamaño:",
+    "remove": "Eliminar",
+    "confirmRemove": "¿Estás seguro de que quieres eliminar el archivo JSON? Esta acción no se puede deshacer.",
+    "confirmRemoveHeader": "Confirmar eliminación",
+    "cancel": "Cancelar",
+    "tables": "Tablas disponibles:",
+    "noTables": "No se encontraron tablas"
+  },
+  "viewer": {
+    "title": "Visor JSON - {{filename}}",
+    "disabled": "El visor JSON está deshabilitado porque el archivo es demasiado grande ({{size}}). Esto puede causar lentitud en el navegador.",
+    "enableAnyway": "Habilitar de todos modos"
+  },
+  "language": {
+    "english": "Inglés",
+    "portuguese": "Portugués",
+    "spanish": "Español"
+  }
+}

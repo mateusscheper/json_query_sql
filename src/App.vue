@@ -9,17 +9,35 @@ import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
 import Skeleton from 'primevue/skeleton'
 import ConfirmDialog from 'primevue/confirmdialog'
+import Popover from 'primevue/popover'
 import {useConfirm} from 'primevue/useconfirm'
 import {JsonViewer} from 'vue3-json-viewer'
 import {SqlUtils} from './utils/sql.utils.js'
 import {JsonUtils} from './utils/json.utils.js'
 import {jsonCache} from './utils/cache.js'
+import {availableLanguages, currentLanguage, setLanguage, t} from './utils/i18n.js'
+import {isDarkMode, toggleTheme} from './utils/theme.js'
+
+const languagePanel = ref()
+
+const currentFlag = computed(() => {
+  const lang = availableLanguages.value.find(l => l.code === currentLanguage.value)
+  return lang?.flag || 'US'
+})
+
+const toggleLanguageMenu = (event) => {
+  languagePanel.value.toggle(event)
+}
+
+const selectLanguage = (langCode) => {
+  setLanguage(langCode)
+  languagePanel.value.hide()
+}
 
 const jsonFile = ref(null)
 const sqlQuery = ref('')
 const queryResults = ref([])
 const jsonData = ref(null)
-const jsonDB = ref(null)
 const columnNames = ref([])
 const showJsonViewer = ref(false)
 const jsonViewerDisabled = ref(false)
@@ -47,7 +65,7 @@ const startResize = (event) => {
 
 const handleResize = (event) => {
   if (!isDragging) return
-  const containerHeight = window.innerHeight - 40 // padding
+  const containerHeight = window.innerHeight - 40
   const newTopHeight = (event.clientY - 20) / containerHeight * 100
   if (newTopHeight >= 20 && newTopHeight <= 80) {
     topHeight.value = newTopHeight
@@ -92,13 +110,7 @@ const loadFromSession = async () => {
   if (savedData) {
     const savedFileName = sessionStorage.getItem('fileName')
     const savedFileSize = sessionStorage.getItem('fileSize')
-    const originalData = JSON.parse(savedData)
-    let processedData = originalData
-    if (Array.isArray(originalData)) {
-      processedData = {root: originalData}
-    }
-    jsonData.value = originalData
-    jsonDB.value = processedData
+    jsonData.value = JSON.parse(savedData)
     jsonFile.value = {name: savedFileName}
     fileSize.value = parseInt(savedFileSize) || 0
     jsonViewerDisabled.value = fileSize.value > 2 * 1024 * 1024
@@ -108,13 +120,7 @@ const loadFromSession = async () => {
   try {
     const cacheData = await jsonCache.load()
     if (cacheData) {
-      const originalData = cacheData.jsonData
-      let processedData = originalData
-      if (Array.isArray(originalData)) {
-        processedData = {root: originalData}
-      }
-      jsonData.value = originalData
-      jsonDB.value = processedData
+      jsonData.value = cacheData.jsonData
       jsonFile.value = {name: cacheData.fileName}
       fileSize.value = cacheData.fileSize
       jsonViewerDisabled.value = fileSize.value > 2 * 1024 * 1024
@@ -135,12 +141,13 @@ const onFileSelect = (event) => {
     reader.onload = (e) => {
       try {
         let data = JSON.parse(e.target.result)
-        const originalData = data
-        if (Array.isArray(data)) {
-          data = {root: data}
+        const isArray = Array.isArray(data)
+        const isObjectWithSingleArray = !isArray && typeof data === 'object' && data !== null && Object.keys(data).length === 1
+
+        if (!isArray && !isObjectWithSingleArray) {
+          data = {root: [data]}
         }
-        jsonData.value = originalData
-        jsonDB.value = data
+        jsonData.value = data
         jsonFile.value = file
         saveToSession()
       } catch (error) {
@@ -152,7 +159,7 @@ const onFileSelect = (event) => {
 }
 
 const executeQuery = async () => {
-  if (!jsonDB.value || !sqlQuery.value.trim()) return
+  if (!jsonData.value || !sqlQuery.value.trim()) return
 
   isExecutingQuery.value = true
   queryLimited.value = false
@@ -161,20 +168,20 @@ const executeQuery = async () => {
   try {
     await new Promise(resolve => setTimeout(resolve, 100))
 
-    const result = SqlUtils.executeSQL(jsonDB.value, sqlQuery.value)
+    const result = SqlUtils.executeSQL(jsonData.value, sqlQuery.value)
 
     queryResults.value = result.results || []
     totalResults.value = result.totalResults || 0
     queryLimited.value = result.limited || false
     hasExplicitLimit.value = result.hasExplicitLimit || false
     hasExecutedQuery.value = true
-    
+
     if (result.results && result.results.length > 0) {
       columnNames.value = Object.keys(result.results[0])
     } else {
       columnNames.value = extractColumnsFromQuery(sqlQuery.value.trim())
     }
-    
+
     if (sqlQuery.value.trim()) {
       addToHistory(sqlQuery.value.trim())
     }
@@ -213,11 +220,11 @@ const extractColumnsFromQuery = (query) => {
 }
 
 const getTableDataForColumns = (tablePath) => {
-  if (!jsonDB.value) return null
-  
+  if (!jsonData.value) return null
+
   const parts = tablePath.split('.')
-  let current = jsonDB.value
-  
+  let current = jsonData.value
+
   for (const part of parts) {
     const cleanPart = part.startsWith('"') && part.endsWith('"') ? part.slice(1, -1) : part
     if (current && typeof current === 'object' && cleanPart in current) {
@@ -226,7 +233,7 @@ const getTableDataForColumns = (tablePath) => {
       return null
     }
   }
-  
+
   return Array.isArray(current) ? current : null
 }
 
@@ -242,7 +249,6 @@ const openJsonViewer = () => {
 const removeFile = async () => {
   jsonFile.value = null
   jsonData.value = null
-  jsonDB.value = null
   queryResults.value = []
   columnNames.value = []
   fileSize.value = 0
@@ -292,22 +298,24 @@ const selectHistoryQuery = (query) => {
 }
 
 const selectTableQuery = (tableName) => {
-  sqlQuery.value = `SELECT * FROM ${tableName}`
+  const parts = tableName.split('.')
+  const quotedParts = parts.map(part => part.includes(' ') ? `"${part}"` : part)
+  sqlQuery.value = "SELECT * FROM " + quotedParts.join('.')
   document.querySelector('.textarea-field').focus()
 }
 
 const confirmRemoveFile = () => {
   confirm.require({
-    message: 'Tem certeza que deseja remover o arquivo JSON? Esta ação não pode ser desfeita.',
-    header: 'Confirmar remoção',
+    message: t('file.confirmRemove'),
+    header: t('file.confirmRemoveHeader'),
     icon: 'pi pi-exclamation-triangle',
     rejectProps: {
-      label: 'Cancelar',
+      label: t('file.cancel'),
       severity: 'secondary',
       outlined: true
     },
     acceptProps: {
-      label: 'Remover',
+      label: t('file.remove'),
       severity: 'danger'
     },
     accept: () => {
@@ -318,209 +326,371 @@ const confirmRemoveFile = () => {
 </script>
 
 <template>
-  <main class="main-container">
-    <div v-if="isLoading" class="loading-container">
-      <div class="loading-content">
-        <Skeleton height="40px" width="200px" style="margin-bottom: 15px;"></Skeleton>
-        <Skeleton height="20px" width="150px"></Skeleton>
+  <div class="app-container">
+    <div class="navbar">
+      <div class="navbar-content">
+        <h1 class="navbar-title">JSON Query SQL</h1>
+        <div class="navbar-actions">
+          <Button
+              @click="toggleTheme"
+              class="theme-button"
+              text
+              rounded
+          >
+            <i :class="isDarkMode ? 'pi pi-sun' : 'pi pi-moon'"></i>
+          </Button>
+          <Button
+              @click="toggleLanguageMenu"
+              class="language-button"
+              text
+              rounded
+          >
+            <img
+                :src="`/src/assets/flags/${currentFlag}.svg`"
+                :alt="currentLanguage"
+                class="flag-icon"
+            />
+          </Button>
+          <Popover ref="languagePanel" class="language-panel">
+            <div class="language-list">
+              <div
+                  v-for="lang in availableLanguages"
+                  :key="lang.code"
+                  @click="selectLanguage(lang.code)"
+                  class="language-item"
+              >
+                <img
+                    :src="`/src/assets/flags/${lang.flag}.svg`"
+                    :alt="lang.name"
+                    class="flag-icon"
+                />
+                <span>{{ lang.name }}</span>
+              </div>
+            </div>
+          </Popover>
+        </div>
       </div>
     </div>
 
-    <div v-else-if="!jsonFile" class="upload-container">
-      <FileUpload
-          mode="basic"
-          :auto="false"
-          accept=".json"
-          :maxFileSize="10000000"
-          @select="onFileSelect"
-          chooseLabel="Selecionar arquivo JSON"
-      />
-    </div>
+    <main class="main-container">
+      <div v-if="isLoading" class="loading-container">
+        <div class="loading-content">
+          <Skeleton height="40px" width="200px" style="margin-bottom: 15px;"></Skeleton>
+          <Skeleton height="20px" width="150px"></Skeleton>
+        </div>
+      </div>
 
-    <div v-else class="interface-container">
-      <div class="top-section" :style="`height: ${topHeight}vh;`">
-        <div class="textarea-container">
-          <div class="textarea-wrapper">
+      <div v-else-if="!jsonFile" class="upload-container">
+        <FileUpload
+            mode="basic"
+            :auto="false"
+            accept=".json"
+            :maxFileSize="10000000"
+            @select="onFileSelect"
+            :chooseLabel="t('upload.selectFile')">
+          <template #filelabel>&nbsp;</template>
+        </FileUpload>
+      </div>
+
+      <div v-else class="interface-container">
+        <div class="top-section" :style="`height: ${topHeight}vh;`">
+          <div class="textarea-container">
+            <div class="textarea-wrapper">
             <Textarea
                 v-model="sqlQuery"
-                placeholder="Digite sua query SQL aqui (ex: SELECT * FROM dataArray WHERE id > 1) - Pressione Ctrl+Enter para executar"
+                :placeholder="t('query.placeholder')"
                 class="textarea-field"
                 @keyup.ctrl.enter="executeQuery"
             />
-            <Message
-                v-if="queryLimited && !hasExplicitLimit && !isExecutingQuery"
-                severity="info"
-                :closable="false"
-                class="textarea-message"
-            >
-              Mostrando {{ queryResults.length }} de {{ totalResults }} resultados. Use "LIMIT X" para especificar um limite ou "LIMIT -1" para remover a limitação.
-            </Message>
-          </div>
-        </div>
-
-        <div class="history-container">
-          <div class="history-header">
-            Histórico de Consultas
-          </div>
-          <div class="history-content">
-            <div v-if="queryHistory.length === 0" class="history-empty">
-              Nenhuma consulta executada ainda
-            </div>
-            <div
-                v-for="(query, index) in queryHistory"
-                :key="index"
-                @click="selectHistoryQuery(query)"
-                class="history-item"
-            >
-              {{ query }}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div
-          @mousedown="startResize"
-          class="resize-divider"
-      >
-        <div class="resize-handle"></div>
-      </div>
-
-      <div class="bottom-section" :style="`height: ${100 - topHeight - 2}vh;`">
-        <div class="results-container">
-          <div v-if="isExecutingQuery" class="skeleton-container">
-            <div class="skeleton-content">
-              <Skeleton height="30px" class="skeleton-item"></Skeleton>
-              <Skeleton height="20px" class="skeleton-item"></Skeleton>
-              <Skeleton height="20px" class="skeleton-item"></Skeleton>
-              <Skeleton height="20px" class="skeleton-item"></Skeleton>
-              <Skeleton height="20px" class="skeleton-item"></Skeleton>
-              <Skeleton height="20px" class="skeleton-item"></Skeleton>
+              <Message
+                  v-if="queryLimited && !hasExplicitLimit && !isExecutingQuery"
+                  severity="info"
+                  :closable="false"
+                  class="textarea-message"
+              >
+                {{ t('query.limitedResults', {current: queryResults.length, total: totalResults}) }}
+              </Message>
             </div>
           </div>
 
-          <DataTable
-              v-else-if="hasExecutedQuery && (columnNames.length > 0 || queryResults.length > 0)"
-              :value="queryResults"
-              scrollable
-              scrollHeight="100%"
-              class="results-table"
-          >
-            <Column
-                field="_index"
-                :header="null"
-                class="index-column"
-            >
-              <template #body="slotProps">
-                {{ slotProps.index + 1 }}
-              </template>
-            </Column>
-            <Column
-                v-for="col in columnNames"
-                :key="col"
-                :field="col"
-                :header="col"
-            />
-            <template v-if="queryResults.length === 0" #empty>
-              <div class="empty-results">
-                0 resultados encontrados
+          <div class="history-container">
+            <div class="history-header">
+              {{ t('query.history') }}
+            </div>
+            <div class="history-content">
+              <div v-if="queryHistory.length === 0" class="history-empty">
+                {{ t('query.noHistory') }}
               </div>
-            </template>
-          </DataTable>
-
-          <div v-else-if="!isExecutingQuery && !hasExecutedQuery" class="no-results">
-            Execute uma query para ver os resultados (Ctrl+Enter)
+              <div
+                  v-for="(query, index) in queryHistory"
+                  :key="index"
+                  @click="selectHistoryQuery(query)"
+                  class="history-item"
+              >
+                {{ query }}
+              </div>
+            </div>
           </div>
-          
-          <div v-else-if="!isExecutingQuery && hasExecutedQuery && queryResults.length === 0" class="no-results">
+        </div>
+
+        <div
+            @mousedown="startResize"
+            class="resize-divider"
+        >
+          <div class="resize-handle"></div>
+        </div>
+
+        <div class="bottom-section" :style="`height: ${100 - topHeight - 2}vh;`">
+          <div class="results-container">
+            <div v-if="isExecutingQuery" class="skeleton-container">
+              <div class="skeleton-content">
+                <Skeleton height="30px" class="skeleton-item"></Skeleton>
+                <Skeleton height="20px" class="skeleton-item"></Skeleton>
+                <Skeleton height="20px" class="skeleton-item"></Skeleton>
+                <Skeleton height="20px" class="skeleton-item"></Skeleton>
+                <Skeleton height="20px" class="skeleton-item"></Skeleton>
+                <Skeleton height="20px" class="skeleton-item"></Skeleton>
+              </div>
+            </div>
+
             <DataTable
-                :value="[]"
+                v-else-if="hasExecutedQuery && (columnNames.length > 0 || queryResults.length > 0)"
+                :value="queryResults"
                 scrollable
                 scrollHeight="100%"
                 class="results-table"
             >
+              <Column
+                  field="_index"
+                  :header="null"
+                  class="index-column"
+              >
+                <template #body="slotProps">
+                  {{ slotProps.index + 1 }}
+                </template>
+              </Column>
+              <Column
+                  v-for="col in columnNames"
+                  :key="col"
+                  :field="col"
+                  :header="col"
+              />
               <template #empty>
                 <div class="empty-results">
-                  0 resultados encontrados
+                  {{ t('query.emptyResults') }}
                 </div>
               </template>
             </DataTable>
-          </div>
-        </div>
 
-        <div class="json-summary">
-          <div v-if="jsonSummary">
-            <div class="file-info">
-              <div class="file-header">
-                <div>
-                  <strong>Arquivo:</strong>
-                  <span
-                      @click="openJsonViewer"
-                      class="file-link"
-                  >
+            <div v-else-if="!isExecutingQuery && !hasExecutedQuery" class="no-results">
+              {{ t('query.noResults') }}
+            </div>
+
+            <div v-else-if="!isExecutingQuery && hasExecutedQuery && queryResults.length === 0" class="no-results">
+              <DataTable
+                  :value="[]"
+                  scrollable
+                  scrollHeight="100%"
+                  class="results-table"
+              >
+                <template #empty>
+                  <div class="empty-results">
+                    {{ t('query.emptyResults') }}
+                  </div>
+                </template>
+              </DataTable>
+            </div>
+          </div>
+
+          <div class="json-summary">
+            <div v-if="jsonSummary">
+              <div class="file-info">
+                <div class="file-header">
+                  <div>
+                    <strong>{{ t('file.file') }}</strong>
+                    <span
+                        @click="openJsonViewer"
+                        class="file-link"
+                    >
                     {{ jsonFile.name }}
                   </span>
+                  </div>
+                  <Button
+                      :label="t('file.remove')"
+                      @click="confirmRemoveFile"
+                      size="small"
+                      severity="danger"
+                      class="remove-btn"
+                  />
                 </div>
-                <Button
-                    label="Remover"
-                    @click="confirmRemoveFile"
-                    size="small"
-                    severity="danger"
-                    class="remove-btn"
-                />
+                <p><strong>{{ t('file.size') }}</strong> {{ formatFileSize(fileSize) }}</p>
               </div>
-              <p><strong>Tamanho:</strong> {{ formatFileSize(fileSize) }}</p>
-            </div>
 
-            <div class="tables-section">
-              <h4 class="tables-title">Tabelas disponíveis:</h4>
-              <div class="tables-list">
-                <div v-for="table in jsonSummary.tables" :key="table" class="table-item" @click="selectTableQuery(table)">
-                  <code class="table-code">{{ table }}</code>
-                </div>
-                <div v-if="jsonSummary.tables.length === 0" class="tables-empty">
-                  Nenhuma tabela encontrada
+              <div class="tables-section">
+                <h4 class="tables-title">{{ t('file.tables') }}</h4>
+                <div class="tables-list">
+                  <div v-for="table in jsonSummary.tables" :key="table" class="table-item" @click="selectTableQuery(table)">
+                    <code class="table-code">{{ table }}</code>
+                  </div>
+                  <div v-if="jsonSummary.tables.length === 0" class="tables-empty">
+                    {{ t('file.noTables') }}
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
 
-    <Dialog
-        v-model:visible="showJsonViewer"
-        class="dialog-container"
-        :header="'Visualizador JSON - ' + jsonFile?.name"
-        :modal="true"
-        :closable="true"
-    >
-      <div v-if="jsonViewerDisabled && !forceEnableViewer">
-        <Message
-            severity="warn"
-            :closable="false"
-            class="dialog-warning"
-        >
-          <div class="dialog-warning-content">
+      <Dialog
+          v-model:visible="showJsonViewer"
+          class="json-viewer-dialog-container"
+          :header="t('viewer.title', { filename: jsonFile?.name })"
+          :modal="true"
+          :closable="true"
+      >
+        <div v-if="jsonViewerDisabled && !forceEnableViewer">
+          <Message
+              severity="warn"
+              :closable="false"
+              class="dialog-warning"
+          >
+            <div class="dialog-warning-content">
             <span>
-              O visualizador JSON está desabilitado porque o arquivo é muito grande ({{ formatFileSize(fileSize) }}). 
-              Isso pode causar lentidão no navegador.
+            {{ t('viewer.disabled', {size: formatFileSize(fileSize)}) }}
             </span>
-            <Button
-                label="Habilitar mesmo assim"
-                @click="enableViewer"
-                size="small"
-                severity="warning"
-                class="dialog-enable-btn"
-            />
-          </div>
-        </Message>
-      </div>
+              <Button
+                  :label="t('viewer.enableAnyway')"
+                  @click="enableViewer"
+                  size="small"
+                  severity="warning"
+                  class="dialog-enable-btn"
+              />
+            </div>
+          </Message>
+        </div>
 
-      <div v-if="!jsonViewerDisabled || forceEnableViewer" class="dialog-viewer">
-        <JsonViewer :value="jsonData" copyable boxed sort theme="light"/>
-      </div>
-    </Dialog>
+        <div v-if="!jsonViewerDisabled || forceEnableViewer" class="dialog-viewer">
+          <JsonViewer :value="jsonData" copyable boxed sort :theme="isDarkMode ? 'dark' : 'light'"/>
+        </div>
+      </Dialog>
 
-    <ConfirmDialog></ConfirmDialog>
-  </main>
+      <ConfirmDialog></ConfirmDialog>
+    </main>
+  </div>
 </template>
+
+<style scoped>
+
+.dark-mode {
+  .navbar, .history-header, :deep(.p-datatable-header-cell) {
+    background: #242424;
+    color: #cccccc;
+  }
+
+  .history-item:hover, .table-item:hover {
+    background: #181818;
+  }
+
+  :deep(.p-datatable-tbody > tr) {
+    background: #525252;
+  }
+
+  :deep(.results-table .index-column) {
+    background-color: #484747;
+    border-right-color: #666;
+  }
+
+  .p-textarea, .results-container, .resize-divider, .json-summary, .history-container {
+    background: var(--p-surface-800);
+    border-color: var(--p-surface-600);
+    border-radius: 6px;
+    color: #cccccc;
+  }
+
+  .no-results {
+    color: #cccccc;
+  }
+
+  .tables-list {
+    background: #242424;
+    border: 1px solid var(--p-surface-600);
+  }
+}
+
+.app-container {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.navbar {
+  background: #fff;
+  border-bottom: 1px solid #e9ecef;
+  padding: 0 1rem;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.navbar-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.navbar-title {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #2196f3;
+}
+
+.navbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.theme-button,
+.language-button {
+  padding: 0.5rem;
+}
+
+.flag-icon {
+  width: 24px;
+  height: 16px;
+  border-radius: 2px;
+}
+
+.language-panel {
+  min-width: 150px;
+}
+
+.language-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.language-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.language-item:hover {
+  background-color: #f8f9fa;
+}
+
+.main-container {
+  flex: 1;
+  overflow: hidden;
+}
+</style>

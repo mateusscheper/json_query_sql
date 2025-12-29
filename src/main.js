@@ -12,6 +12,8 @@ import Aura from '@primevue/themes/aura';
 import {definePreset} from "@primevue/themes";
 import JsonViewer from "vue3-json-viewer";
 import ConfirmationService from 'primevue/confirmationservice';
+import {loadLanguage} from '@/utils/i18n.js';
+import {loadTheme} from '@/utils/theme.js';
 
 const app = createApp(App);
 
@@ -42,12 +44,15 @@ app.use(PrimeVue, {
     theme: {
         preset: MyPreset,
         options: {
-            darkModeSelector: false
+            darkModeSelector: '.dark-mode'
         }
     }
 });
 
 app.use(JsonViewer);
 app.use(ConfirmationService);
+
+loadLanguage();
+loadTheme();
 
 app.mount("#app");
