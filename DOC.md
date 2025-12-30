@@ -20,6 +20,9 @@ This system supports a comprehensive set of SQL operations for querying JSON dat
 | **Table Aliases (Implicit)** | Implicit table aliasing                       | `SELECT * FROM table t WHERE t.id = 1`                                                 |
 | **INNER JOIN**               | Join tables on matching conditions            | `SELECT * FROM table1 t1 JOIN table2 t2 ON t1.id = t2.id`                              |
 | **LEFT JOIN**                | Left outer join with null padding             | `SELECT * FROM table1 t1 LEFT JOIN table2 t2 ON t1.id = t2.id`                         |
+| **RIGHT JOIN**               | Right outer join with null padding            | `SELECT * FROM table1 t1 RIGHT JOIN table2 t2 ON t1.id = t2.id`                        |
+| **OUTER JOIN**               | Full outer join (alias for FULL OUTER JOIN)  | `SELECT * FROM table1 t1 OUTER JOIN table2 t2 ON t1.id = t2.id`                        |
+| **FULL OUTER JOIN**          | Full outer join with null padding             | `SELECT * FROM table1 t1 FULL OUTER JOIN table2 t2 ON t1.id = t2.id`                   |
 | **Complex WHERE**            | Multiple conditions with AND/OR               | `SELECT * FROM table WHERE id > 1 AND name LIKE '%test%'`                              |
 | **Quoted Table Names**       | Tables with spaces or special chars           | `SELECT * FROM "Table Name" WHERE field = 'value'`                                     |
 | **Nested JSON Paths**        | Access nested object properties               | `SELECT * FROM parent.child.grandchild`                                                |

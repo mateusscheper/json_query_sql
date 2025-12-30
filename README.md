@@ -10,7 +10,8 @@ A powerful web application that allows you to execute SQL queries on JSON data.
 ## Features
 
 - **SELECT**: `*`, specific column names, mixed selection (`column, *`), aggregate functions (COUNT, SUM, AVG, MIN, MAX, LEAST, GREATEST)
-- **FROM**: Table paths with dots (`table.subtable`), quoted table names (`"Table Name"`), table aliases (explicit `AS alias` and implicit `table alias`), wildcard navigation (`*`, `*.*`, `*.*.*`, read below), JOIN operations (INNER, LEFT, RIGHT, OUTER)
+- **FROM**: Table paths with dots (`table.subtable`), quoted table names (`"Table Name"`), table aliases (explicit `AS alias` and implicit `table alias`), wildcard navigation (`*`, `*.*`, `*.*.*`, read below), JOIN operations (INNER, LEFT,
+  RIGHT, OUTER)
 - **WHERE**: Comparison operators (`=`, `!=`, `<>`, `>`, `<`), pattern matching (LIKE, ILIKE with `%` and `_`), logical operators (AND, OR), alias references (`alias.field`)
 - **Advanced Operations**: Common Table Expressions with WITH clause (single and multiple CTEs), UNION and UNION ALL for combining results, LIMIT for result pagination (`LIMIT n` or `LIMIT -1` for unlimited)
 - **Wildcard Navigation**: Multi-level JSON traversal using nested wildcards (`*` for one level, `*.*` for two levels, `*.*.*` for three levels, etc.) to dynamically explore JSON structure and combine data from multiple nested objects
@@ -19,7 +20,7 @@ A powerful web application that allows you to execute SQL queries on JSON data.
 
 ### Prerequisites
 
-- Node.js 18+ (required for ES modules and modern JavaScript features)
+- Node.js 18+
 - npm 8+ or yarn 1.22+
 
 ### Installation
@@ -74,76 +75,6 @@ npm test
 
 # Run tests with debug output
 DEBUG=true npm test
-```
-
-## Project Structure
-
-```
-json-query-sql/
-├── public/
-│   └── favicon.ico
-├── src/
-│   ├── assets/
-│   │   └── styles.scss      # Global styles
-│   ├── utils/
-│   │   ├── sql.utils.js     # Main SQL query logic
-│   │   ├── json.utils.js    # JSON manipulation utilities
-│   │   ├── cache.js         # Caching system with compression
-│   │   └── debug.utils.js   # Debug utilities
-│   ├── App.vue              # Main Vue component
-│   └── main.js              # Application entry point
-├── test/
-│   └── sql.utils.test.js    # Unit tests
-├── .env.example             # Environment variables template
-├── .gitignore
-├── package.json
-├── vite.config.js           # Vite configuration
-└── README.md
-```
-
-## Technology Stack
-
-- **Frontend Framework**: Vue.js 3.5+
-- **Build Tool**: Vite 7.3+
-- **UI Components**: PrimeVue 4.5+
-- **Styling**: PrimeFlex, SCSS
-- **Data Compression**: Pako (gzip compression)
-- **Storage**: IndexedDB for large files, SessionStorage for small files
-- **Testing**: Custom test runner with comprehensive SQL engine tests
-
-## Performance Features
-
-- **Smart Caching**: Automatic caching with compression for large JSON files
-- **Memory Management**: Efficient handling of large datasets
-- **Lazy Loading**: Progressive loading of query results
-- **Session Persistence**: Maintains data across browser sessions
-- **Compression**: Automatic gzip compression for files > 1MB
-
-## Configuration
-
-Create a `.env` file based on `.env.example`:
-
-```bash
-# Enable debug mode (optional)
-DEBUG=false
-```
-
-## Troubleshooting
-
-### Common Issues
-
-1. **Large File Performance**: Files > 2MB are automatically compressed and cached
-2. **Memory Issues**: The app limits results to 100 by default, use `LIMIT -1` to remove limits
-3. **JSON Structure**: Ensure your JSON has array structures for table-like queries
-4. **Browser Compatibility**: Requires modern browsers with IndexedDB support
-
-### Debug Mode
-
-Enable debug mode to see detailed query execution logs:
-
-```bash
-# In .env file
-DEBUG=true
 ```
 
 ## Contributing
