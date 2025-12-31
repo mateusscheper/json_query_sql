@@ -228,8 +228,117 @@ test('SELECT * FROM audios."Whatsapp Audios" AS wa WHERE wa.sender = "John" - de
     assertEquals(result.results, expected, 'Query: Alias com nome de tabela complexo');
 });
 
+debugLog('\nExecutando testes de ORDER BY...');
+
+test('SELECT * FROM audios.Music ORDER BY artist ASC - deve ordenar por artista crescente', () => {
+    const result = SqlUtils.executeSQL(testData, 'SELECT * FROM audios.Music ORDER BY artist ASC');
+    const expected = [
+        {id: 1, artist: "Beatles", song: "Yesterday"},
+        {id: 2, artist: "Queen", song: "Bohemian Rhapsody"}
+    ];
+    assertEquals(result.results, expected, 'Query: ORDER BY ASC');
+});
+
+test('SELECT * FROM audios.Music ORDER BY artist DESC - deve ordenar por artista decrescente', () => {
+    const result = SqlUtils.executeSQL(testData, 'SELECT * FROM audios.Music ORDER BY artist DESC');
+    const expected = [
+        {id: 2, artist: "Queen", song: "Bohemian Rhapsody"},
+        {id: 1, artist: "Beatles", song: "Yesterday"}
+    ];
+    assertEquals(result.results, expected, 'Query: ORDER BY DESC');
+});
+
+test('SELECT * FROM audios.Music ORDER BY artist - deve ordenar crescente por padrão', () => {
+    const result = SqlUtils.executeSQL(testData, 'SELECT * FROM audios.Music ORDER BY artist');
+    const expected = [
+        {id: 1, artist: "Beatles", song: "Yesterday"},
+        {id: 2, artist: "Queen", song: "Bohemian Rhapsody"}
+    ];
+    assertEquals(result.results, expected, 'Query: ORDER BY sem direção');
+});
+
+test('SELECT * FROM audio ORDER BY duration DESC, id ASC - deve ordenar por múltiplas colunas', () => {
+    const result = SqlUtils.executeSQL(testData, 'SELECT * FROM audio ORDER BY duration DESC, id ASC');
+    const expected = [
+        {id: 2, title: "Song 2", duration: 240},
+        {id: 1, title: "Song 1", duration: 180}
+    ];
+    assertEquals(result.results, expected, 'Query: ORDER BY múltiplas colunas');
+});
+
+test('SELECT * FROM audios.Memes ORDER BY likes DESC - deve ordenar números corretamente', () => {
+    const result = SqlUtils.executeSQL(testData, 'SELECT * FROM audios.Memes ORDER BY likes DESC');
+    const expected = [
+        {id: 1, meme: "Distracted Boyfriend", likes: 1000},
+        {id: 2, meme: "Drake Pointing", likes: 800}
+    ];
+    assertEquals(result.results, expected, 'Query: ORDER BY numérico');
+});
+
+test('SELECT * FROM audios.Music WHERE id > 0 ORDER BY song ASC LIMIT 1 - deve combinar WHERE, ORDER BY e LIMIT', () => {
+    const result = SqlUtils.executeSQL(testData, 'SELECT * FROM audios.Music WHERE id > 0 ORDER BY song ASC LIMIT 1');
+    const expected = [
+        {id: 2, artist: "Queen", song: "Bohemian Rhapsody"}
+    ];
+    assertEquals(result.results, expected, 'Query: WHERE + ORDER BY + LIMIT');
+});
+
+test('SELECT * FROM audio ORDER BY 2 DESC - deve ordenar por posição da coluna', () => {
+    const result = SqlUtils.executeSQL(testData, 'SELECT * FROM audio ORDER BY 2 DESC');
+    const expected = [
+        {id: 2, title: "Song 2", duration: 240},
+        {id: 1, title: "Song 1", duration: 180}
+    ];
+    assertEquals(result.results, expected, 'Query: ORDER BY posição');
+});
+
+test('SELECT id, title FROM audio ORDER BY 1, 2 DESC - deve ordenar por múltiplas posições', () => {
+    const result = SqlUtils.executeSQL(testData, 'SELECT id, title FROM audio ORDER BY 1, 2 DESC');
+    const expected = [
+        {id: 1, title: "Song 1"},
+        {id: 2, title: "Song 2"}
+    ];
+    assertEquals(result.results, expected, 'Query: ORDER BY múltiplas posições');
+});
+
+test('SELECT * FROM audio ORDER BY 3 ASC - deve ordenar por terceira coluna (duration)', () => {
+    const result = SqlUtils.executeSQL(testData, 'SELECT * FROM audio ORDER BY 3 ASC');
+    const expected = [
+        {id: 1, title: "Song 1", duration: 180},
+        {id: 2, title: "Song 2", duration: 240}
+    ];
+    assertEquals(result.results, expected, 'Query: ORDER BY terceira posição');
+});
+
+test('SELECT title, duration FROM audio ORDER BY 2 DESC, 1 ASC - deve ordenar por posição com múltiplas direções', () => {
+    const result = SqlUtils.executeSQL(testData, 'SELECT title, duration FROM audio ORDER BY 2 DESC, 1 ASC');
+    const expected = [
+        {title: "Song 2", duration: 240},
+        {title: "Song 1", duration: 180}
+    ];
+    assertEquals(result.results, expected, 'Query: ORDER BY posições com direções diferentes');
+});
+
+test('SELECT id, title, duration FROM audio ORDER BY 1 DESC - deve ordenar por primeira posição decrescente', () => {
+    const result = SqlUtils.executeSQL(testData, 'SELECT id, title, duration FROM audio ORDER BY 1 DESC');
+    const expected = [
+        {id: 2, title: "Song 2", duration: 240},
+        {id: 1, title: "Song 1", duration: 180}
+    ];
+    assertEquals(result.results, expected, 'Query: ORDER BY primeira posição DESC');
+});
+
+test('SELECT * FROM audios.Memes ORDER BY 3 ASC - deve ordenar por posição numérica crescente', () => {
+    const result = SqlUtils.executeSQL(testData, 'SELECT * FROM audios.Memes ORDER BY 3 ASC');
+    const expected = [
+        {id: 2, meme: "Drake Pointing", likes: 800},
+        {id: 1, meme: "Distracted Boyfriend", likes: 1000}
+    ];
+    assertEquals(result.results, expected, 'Query: ORDER BY posição numérica');
+});
+
 debugLog('\nTodos os testes concluídos!');
 
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { test, assertEquals };
+    module.exports = {test, assertEquals};
 }

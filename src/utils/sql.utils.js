@@ -20,6 +20,7 @@ class QueryBuilder {
         this.tableAlias = null;
         this.joins = [];
         this.isJoinQuery = false;
+        this.orderByClause = null;
     }
 
     parseQuery(sqlQuery) {
@@ -34,8 +35,9 @@ class QueryBuilder {
         }
 
         const selectMatch = query.match(/SELECT\s+(.+?)\s+FROM/i);
-        const fromMatch = query.match(/FROM\s+(.+?)(?:\s+WHERE|\s+LIMIT|$)/i);
-        const whereMatch = query.match(/WHERE\s+(.+?)(?:\s+LIMIT|$)/i);
+        const fromMatch = query.match(/FROM\s+(.+?)(?:\s+WHERE|\s+ORDER\s+BY|\s+LIMIT|$)/i);
+        const whereMatch = query.match(/WHERE\s+(.+?)(?:\s+ORDER\s+BY|\s+LIMIT|$)/i);
+        const orderByMatch = query.match(/ORDER\s+BY\s+(.+?)(?:\s+LIMIT|$)/i);
         const limitMatch = query.match(/LIMIT\s+(-?\d+)/i);
 
         if (!selectMatch || !fromMatch) {
@@ -50,6 +52,7 @@ class QueryBuilder {
         this.tableAlias = alias;
 
         this.whereClause = whereMatch ? SqlUtils.getWhereClauseFn(whereMatch[1].trim(), alias, tablePath) : null;
+        this.orderByClause = orderByMatch ? SqlUtils.parseOrderBy(orderByMatch[1].trim()) : null;
         this.limitValue = limitMatch ? parseInt(limitMatch[1]) : null;
         this.originalLimitValue = this.limitValue;
 
@@ -100,10 +103,12 @@ class QueryBuilder {
 
         this.parseJoins(query);
 
-        const whereMatch = query.match(/WHERE\s+(.+?)(?:\s+LIMIT|$)/i);
+        const whereMatch = query.match(/WHERE\s+(.+?)(?:\s+ORDER\s+BY|\s+LIMIT|$)/i);
+        const orderByMatch = query.match(/ORDER\s+BY\s+(.+?)(?:\s+LIMIT|$)/i);
         const limitMatch = query.match(/LIMIT\s+(-?\d+)/i);
 
         this.whereClause = whereMatch ? SqlUtils.getWhereClauseFn(whereMatch[1].trim()) : null;
+        this.orderByClause = orderByMatch ? SqlUtils.parseOrderBy(orderByMatch[1].trim()) : null;
         this.limitValue = limitMatch ? parseInt(limitMatch[1]) : null;
         this.originalLimitValue = this.limitValue;
 
@@ -192,9 +197,13 @@ class QueryBuilder {
         }
 
         const dataRows = Array.isArray(this.table) ? this.table : [this.table];
-        const allResults = dataRows
+        let allResults = dataRows
             .map(row => SqlUtils.assembleRowData(row, this.columns, this.whereClause))
             .filter(row => Object.keys(row).length > 0);
+
+        if (this.orderByClause) {
+            allResults = SqlUtils.applyOrderBy(allResults, this.orderByClause, this.columns);
+        }
 
         this.totalResults = allResults.length;
 
@@ -331,6 +340,10 @@ class QueryBuilder {
                     return false;
                 }
             });
+        }
+
+        if (this.orderByClause) {
+            results = SqlUtils.applyOrderBy(results, this.orderByClause, SqlUtils.buildColumnList(this.columns, results[0]));
         }
 
         const processedResults = this.processJoinColumns(results);
@@ -878,5 +891,73 @@ export class SqlUtils {
         }
 
         return processWildcard(jsonData, parts);
+    }
+
+    static parseOrderBy(orderByClause) {
+        return orderByClause.split(',').map(col => {
+            const trimmed = col.trim();
+            const parts = trimmed.split(/\s+/);
+            const column = parts[0];
+
+            // Find the last valid direction keyword
+            let direction = 'ASC';
+            for (let i = parts.length - 1; i >= 1; i--) {
+                const part = parts[i].toUpperCase();
+                if (part === 'DESC' || part === 'ASC') {
+                    direction = part;
+                    break;
+                }
+            }
+
+            return {column, direction};
+        });
+    }
+
+    static applyOrderBy(results, orderByClause, columnList = null) {
+        if (!orderByClause || orderByClause.length === 0) {
+            return results;
+        }
+
+        const mappedOrderBy = orderByClause.map(({column, direction}) => {
+            if (/^\d+$/.test(column) && columnList) {
+                const position = parseInt(column) - 1;
+                if (position >= 0 && position < columnList.length) {
+                    return {column: columnList[position], direction};
+                }
+            }
+            return {column, direction};
+        });
+
+        return results.sort((a, b) => {
+            for (const {column, direction} of mappedOrderBy) {
+                let aVal = a[column];
+                let bVal = b[column];
+
+                if (aVal === null || aVal === undefined) aVal = '';
+                if (bVal === null || bVal === undefined) bVal = '';
+
+                if (typeof aVal === 'string' && typeof bVal === 'string') {
+                    const comparison = aVal.localeCompare(bVal);
+                    if (comparison !== 0) {
+                        return direction === 'DESC' ? -comparison : comparison;
+                    }
+                } else {
+                    const numA = Number(aVal);
+                    const numB = Number(bVal);
+
+                    if (!isNaN(numA) && !isNaN(numB)) {
+                        if (numA !== numB) {
+                            return direction === 'DESC' ? numB - numA : numA - numB;
+                        }
+                    } else {
+                        const comparison = String(aVal).localeCompare(String(bVal));
+                        if (comparison !== 0) {
+                            return direction === 'DESC' ? -comparison : comparison;
+                        }
+                    }
+                }
+            }
+            return 0;
+        });
     }
 }

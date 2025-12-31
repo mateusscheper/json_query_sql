@@ -13,6 +13,7 @@ A powerful web application that allows you to execute SQL queries on JSON data.
 - **FROM**: Table paths with dots (`table.subtable`), quoted table names (`"Table Name"`), table aliases (explicit `AS alias` and implicit `table alias`), wildcard navigation (`*`, `*.*`, `*.*.*`, read below), JOIN operations (INNER, LEFT,
   RIGHT, OUTER)
 - **WHERE**: Comparison operators (`=`, `!=`, `<>`, `>`, `<`), pattern matching (LIKE, ILIKE with `%` and `_`), logical operators (AND, OR), alias references (`alias.field`)
+- **ORDER BY**: Sort results by one or more columns in ascending (ASC) or descending (DESC) order, supports multiple columns with different directions
 - **Advanced Operations**: Common Table Expressions with WITH clause (single and multiple CTEs), UNION and UNION ALL for combining results, LIMIT for result pagination (`LIMIT n` or `LIMIT -1` for unlimited)
 - **Wildcard Navigation**: Multi-level JSON traversal using nested wildcards (`*` for one level, `*.*` for two levels, `*.*.*` for three levels, etc.) to dynamically explore JSON structure and combine data from multiple nested objects
 
@@ -56,7 +57,7 @@ For detailed SQL syntax and examples, see [DOC.md](DOC.md).
 
 ### Supported Features
 
-- **Basic SQL Operations**: SELECT, WHERE, LIMIT with full operator support
+- **Basic SQL Operations**: SELECT, WHERE, ORDER BY, LIMIT with full operator support
 - **Wildcard Navigation**: Use `*` to navigate JSON levels dynamically
 - **UNION Operations**: Combine results with UNION and UNION ALL
 - **Common Table Expressions**: Complex queries with WITH clauses
@@ -64,6 +65,7 @@ For detailed SQL syntax and examples, see [DOC.md](DOC.md).
 - **JOIN Operations**: INNER, LEFT, RIGHT, and OUTER joins
 - **Aggregate Functions**: COUNT, SUM, AVG, MIN, MAX, LEAST, GREATEST
 - **Advanced Filtering**: Pattern matching with LIKE/ILIKE operators
+- **Sorting**: ORDER BY with single or multiple columns, ASC/DESC directions
 
 ## Testing
 
