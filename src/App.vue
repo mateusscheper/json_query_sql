@@ -454,6 +454,15 @@ const confirmRemoveFile = () => {
                   class="textarea-field"
                   @keyup.ctrl.enter="executeQuery"
               />
+                <Button
+                    @click="executeQuery"
+                    :disabled="isExecutingQuery || !sqlQuery.trim()"
+                    class="floating-execute-btn"
+                    rounded
+                    size="small"
+                >
+                  <i class="pi pi-play"></i>
+                </Button>
                 <Message
                     v-if="queryLimited && !hasExplicitLimit && !isExecutingQuery"
                     severity="info"
@@ -765,6 +774,19 @@ const confirmRemoveFile = () => {
     background: var(--p-surface-700);
   }
 
+  .floating-execute-btn {
+    background: #2196f3;
+  }
+
+  .floating-execute-btn:hover:not(:disabled) {
+    background: #1976d2;
+  }
+
+  .floating-execute-btn:disabled {
+    background: #555;
+    color: #777;
+  }
+
 
   .github-button {
     color: #ffffff;
@@ -899,6 +921,33 @@ const confirmRemoveFile = () => {
   width: 100%;
   height: 100%;
   resize: none;
+}
+
+.floating-execute-btn {
+  position: absolute !important;
+  bottom: 12px;
+  right: 12px;
+  z-index: 10;
+  width: 36px;
+  height: 36px;
+  background: #2196f3;
+  color: white;
+  border: none;
+  box-shadow: 0 2px 8px rgba(33, 150, 243, 0.3);
+  transition: all 0.2s ease;
+}
+
+.floating-execute-btn:hover:not(:disabled) {
+  background: #1976d2;
+  box-shadow: 0 4px 12px rgba(33, 150, 243, 0.4);
+  transform: translateY(-1px);
+}
+
+.floating-execute-btn:disabled {
+  background: #ccc;
+  color: #999;
+  box-shadow: none;
+  cursor: not-allowed;
 }
 
 .textarea-message {
