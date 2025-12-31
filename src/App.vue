@@ -18,6 +18,15 @@ import {JsonUtils} from './utils/json.utils.js'
 import {jsonCache} from './utils/cache.js'
 import {availableLanguages, currentLanguage, setLanguage, t} from './utils/i18n.js'
 import {isDarkMode, toggleTheme} from './utils/theme.js'
+import BRFlag from './assets/flags/BR.svg'
+import USFlag from './assets/flags/US.svg'
+import ESFlag from './assets/flags/ES.svg'
+
+const flags = {
+  BR: BRFlag,
+  US: USFlag,
+  ES: ESFlag
+}
 
 const languagePanel = ref()
 
@@ -366,6 +375,14 @@ const confirmRemoveFile = () => {
             <i class="pi pi-bars"></i>
           </Button>
           <Button
+              as="a"
+              target="_BLANK"
+              href="https://github.com/mateusscheper/json_query_sql"
+              class="github-button no-underline"
+              rel="noopener"
+              icon="pi pi-github"
+              link/>
+          <Button
               @click="toggleTheme"
               class="theme-button"
               text
@@ -380,7 +397,7 @@ const confirmRemoveFile = () => {
               rounded
           >
             <img
-                :src="`/src/assets/flags/${currentFlag}.svg`"
+                :src="flags[currentFlag]"
                 :alt="currentLanguage"
                 class="flag-icon"
             />
@@ -394,7 +411,7 @@ const confirmRemoveFile = () => {
                   class="language-item"
               >
                 <img
-                    :src="`/src/assets/flags/${lang.flag}.svg`"
+                    :src="flags[lang.flag]"
                     :alt="lang.name"
                     class="flag-icon"
                 />
@@ -747,6 +764,11 @@ const confirmRemoveFile = () => {
   .sidebar-toggle-btn:hover, .drawer-toggle:hover {
     background: var(--p-surface-700);
   }
+
+
+  .github-button {
+    color: #ffffff;
+  }
 }
 
 .app-container {
@@ -790,8 +812,13 @@ const confirmRemoveFile = () => {
 }
 
 .theme-button,
-.language-button {
+.language-button,
+.github-button {
   padding: 0.5rem;
+}
+
+.github-button {
+  color: var(--p-surface-600);
 }
 
 .flag-icon {
