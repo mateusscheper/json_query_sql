@@ -17,6 +17,10 @@ A powerful web application that allows you to execute SQL queries on JSON data.
 - **Advanced Operations**: Common Table Expressions with WITH clause (single and multiple CTEs), UNION and UNION ALL for combining results, LIMIT for result pagination (`LIMIT n` or `LIMIT -1` for unlimited)
 - **Wildcard Navigation**: Multi-level JSON traversal using nested wildcards (`*` for one level, `*.*` for two levels, `*.*.*` for three levels, etc.) to dynamically explore JSON structure and combine data from multiple nested objects
 
+## Demo
+
+[https://mateusscheper.github.io/json_query_sql](https://mateusscheper.github.io/json_query_sql)
+
 ## Quick Start
 
 ### Prerequisites
